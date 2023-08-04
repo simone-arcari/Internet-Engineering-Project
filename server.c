@@ -27,7 +27,7 @@ void receive_file(int client_socket, struct sockaddr_in client_address, char* fi
     // Implementa la logica per ricevere un file dal client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
-void *handle_client(void *arg) {
+/*void *handle_client(void *arg) {
     ClientInfo *client_info = (ClientInfo *)arg;
     int client_socket = client_info->client_socket;
     struct sockaddr_in client_address = client_info->client_address;
@@ -62,7 +62,7 @@ void *handle_client(void *arg) {
     free(client_info);
     
     return NULL;
-}
+}*/
 
 int main() {
     int server_socket, client_socket, addr_len, bytes_received;
@@ -77,7 +77,7 @@ int main() {
         printf("Errore socket(): %s\n", strerror(errno));   // Controllare variabile globale errno qui
         
 
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     // Configurazione dell'indirizzo del server
@@ -92,7 +92,7 @@ int main() {
         printf("Errore bind(): %s\n", strerror(errno));
         
 
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     printf("Server in ascolto sulla porta %d\n", DEFAULT_PORT);
@@ -101,17 +101,21 @@ int main() {
         addr_len = sizeof(client_address);
         
         // Ricezione del comando dal client
-        bytes_received = recvfrom(server_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_address, &addr_len);
+        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
-            perror("Errore nella ricezione del messaggio dal client");
+            //perror("Errore recvfrom()");
+            printf("Errore recvfrom(): %s\n", strerror(errno));
 
-            // Controllare variabileglobale errno qui
 
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         
         buffer[bytes_received] = '\0';
+
+        /* stampa messaggi ricevuti */
+    	printf("dati da %s : UDP port %u : %s \n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), buffer);
         
+        /*
         // Creazione di una struttura ClientInfo per passare le informazioni del client al thread
         ClientInfo *client_info = (ClientInfo *)malloc(sizeof(ClientInfo));
         client_info->client_socket = client_socket;
@@ -127,11 +131,11 @@ int main() {
         }
         
         // Detach del thread per permettere la terminazione automatica
-        pthread_detach(tid);
+        pthread_detach(tid);*/
     }
     
     // Chiusura della socket del server
-    close(server_socket);
+    //close(server_socket);
     
     return 0;
 }

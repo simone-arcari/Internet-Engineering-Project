@@ -16,7 +16,7 @@
 #include <sys/time.h> /* select() */ 
 #include <stdlib.h>
 
-#define REMOTE_SERVER_PORT 7000
+#define REMOTE_SERVER_PORT 8888
 #define MAX_MSG 100
 
 
