@@ -1,11 +1,17 @@
 #include <stdio.h>
+#include <errno.h>
+#include <netdb.h>
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
+#define IP_SERVER "192.168.1.22"
 
 void request_file_list(int server_socket, struct sockaddr_in server_address) {
     // Implementa la logica per richiedere la lista dei file disponibili al server
@@ -22,22 +28,36 @@ void receive_file(int server_socket, struct sockaddr_in server_address, char* fi
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
 }
 
+void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
+    // Implementa la logica per inviare un file al server
+    // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
+}
+
 int main() {
     int client_socket, bytes_received;
     struct sockaddr_in server_address;
     char buffer[MAX_BUFFER_SIZE];
 
     // Creazione della socket del client
-    client_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    client_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (client_socket < 0) {
-        perror("Errore nella creazione della socket del client");
-        exit(1);
+        //perror("Errore");
+        printf("Errore socket(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
     }
 
     // Configurazione dell'indirizzo del server
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    if (inet_pton(AF_INET, IP_SERVER, &server_address.sin_addr) < 0) {
+        //perror("Errore");
+        printf("Errore inet_pton(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
+    }
 
     while (1) {
         // Richiesta di input da parte dell'utente
@@ -77,7 +97,7 @@ int main() {
     }
 
     // Chiusura della socket del client
-    close(client_socket);
+    //close(client_socket);
 
     return 0;
 }

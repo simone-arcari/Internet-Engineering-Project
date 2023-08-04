@@ -16,6 +16,7 @@
         "graphene-macros.h": "c",
         "in.h": "c",
         "stdlib.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "socket.h": "c"
     }
 }
