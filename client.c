@@ -68,7 +68,7 @@ int main() {
         sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
         // Verifica del comando inviato
-        if (strcmp(buffer, "list\n") == 0) {
+        if (strcmp(buffer, "list") == 0) {
             // Richiesta della lista dei file disponibili al server
             request_file_list(client_socket, server_address);
         } else if (strncmp(buffer, "get", 3) == 0) {
