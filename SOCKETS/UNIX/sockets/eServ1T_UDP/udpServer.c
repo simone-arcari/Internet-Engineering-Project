@@ -15,7 +15,7 @@
 #include <string.h> /* memset() */
 #include <stdlib.h>
 
-#define LOCAL_SERVER_PORT 7000
+#define LOCAL_SERVER_PORT 8888
 #define MAX_MSG 100
 
 int main(int argc, char *argv[]) {
