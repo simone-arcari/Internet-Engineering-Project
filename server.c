@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <pthread.h>
+
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
@@ -17,17 +19,14 @@ void send_file_list(int client_socket, struct sockaddr_in client_address) {
     // Implementa la logica per inviare la lista dei file disponibili al client
     // Utilizza la socket client_socket e l'indirizzo del client client_address
 }
-
 void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
-
 void receive_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per ricevere un file dal client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
-
 void *handle_client(void *arg) {
     ClientInfo *client_info = (ClientInfo *)arg;
     int client_socket = client_info->client_socket;
@@ -72,25 +71,26 @@ int main() {
     pthread_t tid;
     
     // Creazione della socket del server
-    server_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    server_socket = socket(AF_INET, SOCK_DGRAM,  IPPROTO_UDP);
     if (server_socket < 0) {
-        perror("Errore nella creazione della socket del server");
-
-        // Controllare variabileglobale errno qui
+        //perror("Errore");
+        printf("Errore socket(): %s\n", strerror(errno));   // Controllare variabile globale errno qui
+        
 
         exit(1);
     }
     
     // Configurazione dell'indirizzo del server
+    memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_addr.s_addr = htonl(INADDR_ANY);     // il server accetta richieste su ogni interfaccia di rete 
     
     // Associazione dell'indirizzo del server alla socket
-    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
-        perror("Errore nella bind della socket del server");
-
-        // Controllare variabileglobale errno qui
+    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {   
+        //perror("Errore");
+        printf("Errore bind(): %s\n", strerror(errno));
+        
 
         exit(1);
     }

@@ -1,0 +1,21 @@
+{
+    "files.associations": {
+        "gtk.h": "c",
+        "gtkwindow.h": "c",
+        "gtkversion.h": "c",
+        "gtkvideo.h": "c",
+        "stdio.h": "c",
+        "config.h": "c",
+        "gsk.h": "c",
+        "gskrenderer.h": "c",
+        "gskrendernode.h": "c",
+        "gsktypes.h": "c",
+        "gtkaboutdialog.h": "c",
+        "graphene.h": "c",
+        "graphene-types.h": "c",
+        "graphene-macros.h": "c",
+        "in.h": "c",
+        "stdlib.h": "c",
+        "string.h": "c"
+    }
+}

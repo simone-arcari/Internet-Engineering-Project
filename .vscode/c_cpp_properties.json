@@ -1,0 +1,43 @@
+{
+    "configurations": [
+        {
+            "name": "Ubuntu - GTK4",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "gcc-x64",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/gtk-4.0",
+                "/usr/include/glib-2.0",
+                "/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+                "/usr/include/pango-1.0",
+                "/usr/include/harfbuzz",
+                "/usr/include/fribidi",
+                "/usr/include/cairo",
+                "/usr/include/gdk-pixbuf-2.0",
+                "/usr/include/graphene-1.0",
+                "/usr/lib/x86_64-linux-gnu/graphene-1.0/include",
+                "/usr/lib/x86_64-linux-gnu/perl/5.34.0/CORE"
+            ],
+            "defines": [],
+            "compilerArgs": [
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/usr/include/gtk-4.0/gtk",
+                    "/usr/include/graphene-1.0"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ],
+    "version": 4
+}
+
