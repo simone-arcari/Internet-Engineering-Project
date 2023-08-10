@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,53 +40,72 @@ int main() {
     struct sockaddr_in server_address;
     char buffer[MAX_BUFFER_SIZE];
 
+
+
     // Creazione della socket del client
     client_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (client_socket < 0) {
-        //perror("Errore");
         printf("Errore socket(): %s\n", strerror(errno)); 
 
 
         exit(EXIT_FAILURE);
     }
 
+
+
     // Configurazione dell'indirizzo del server
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
     if (inet_pton(AF_INET, IP_SERVER, &server_address.sin_addr) < 0) {
-        //perror("Errore");
         printf("Errore inet_pton(): %s\n", strerror(errno)); 
 
 
         exit(EXIT_FAILURE);
     }
 
-    while (1) {
-        // Richiesta di input da parte dell'utente
+
+
+    while (1) { /*Richiesta di input da parte dell'utente*/
         printf("Inserisci un comando (list, get <nome_file>, put <nome_file>): ");
-        fgets(buffer, sizeof(buffer), stdin);
+        fgets(buffer, MAX_BUFFER_SIZE, stdin);
+        buffer[strlen(buffer)-1] = '\0';
+
 
         // Invio del comando al server
         sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
+
         // Verifica del comando inviato
-        if (strcmp(buffer, "list") == 0) {
-            // Richiesta della lista dei file disponibili al server
+        if (strcmp(buffer, "list") == 0) {  /*Richiesta della lista dei file disponibili al server*/
             request_file_list(client_socket, server_address);
-        } else if (strncmp(buffer, "get", 3) == 0) {
-            // Estrapolazione del nome del file dalla richiesta "get"
-            char* filename = buffer + 4;
 
-            // Richiesta del file al server
-            request_file(client_socket, server_address, filename);
-        } else if (strncmp(buffer, "put", 3) == 0) {
-            // Estrapolazione del nome del file dalla richiesta "put"
-            char* filename = buffer + 4;
 
-            // Invio del file al server
-            send_file(client_socket, server_address, filename);
-        } else {
-            // Comando non valido, ricevo un messaggio di errore dal server
+
+        } else if (strncmp(buffer, "get", 3) == 0) {    /*Estrapolazione del nome del file dalla richiesta "get"*/          
+            char* filename = buffer + 4;
+            request_file(client_socket, server_address, filename);  // Richiesta del file al server
+
+
+
+        } else if (strncmp(buffer, "put", 3) == 0) {    /*Estrapolazione del nome del file dalla richiesta "put"*/
+            char* filename = buffer + 4;
+            send_file(client_socket, server_address, filename); // Invio del file al server
+
+
+
+        } else if (strcmp(buffer, "close") == 0) {  /*Chiusura programma e chiusura della socket del client*/
+            if (close(client_socket) < 0) {
+                perror("Errore nella chiusura della socket");
+
+
+                exit(EXIT_FAILURE);
+            }
+
+            exit(EXIT_SUCCESS);
+
+
+        } else {    /*Comando non valido, ricevo un messaggio di errore dal server*/
+            /*
             bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
             if (bytes_received < 0) {
                 perror("Errore nella ricezione del messaggio di errore dal server");
@@ -94,11 +114,11 @@ int main() {
 
             buffer[bytes_received] = '\0';
             printf("Errore: %s\n", buffer);
+            */
         }
     }
 
-    // Chiusura della socket del client
-    //close(client_socket);
 
-    return 0;
+
+    return EXIT_SUCCESS;
 }
