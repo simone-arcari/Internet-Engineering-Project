@@ -11,7 +11,8 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define IP_SERVER "192.168.1.22"
+//#define IP_SERVER "192.168.1.22"    // PC FISSO
+#define IP_SERVER "192.168.1.27"    // PC PORTATILE
 
 void request_file_list(int server_socket, struct sockaddr_in server_address) {
     // Implementa la logica per richiedere la lista dei file disponibili al server
