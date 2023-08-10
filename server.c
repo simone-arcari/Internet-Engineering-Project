@@ -140,7 +140,8 @@ int main(int argc, char *argv[]) {
         printf("%s: dati da %s:UDP%u : %s \n", argv[0], inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), buffer);        
         
         /* gestore dei comandi */
-        if (strcmp(buffer, "list") == 0) {
+        if (strcmp(buffer, "list\n") == 0) {
+            printf("%s", buffer);
             send_file_list(client_socket, client_address);
 
         } else if (strcmp(buffer, "get") == 0) {
@@ -151,6 +152,7 @@ int main(int argc, char *argv[]) {
 
         } else {
             printf("Comando non riconosciuto\n");
+            printf("%s", buffer);
 
         }
         
