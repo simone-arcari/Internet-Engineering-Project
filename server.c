@@ -17,6 +17,43 @@
 
 
 
+#define RESET     "\033[0m"
+#define BOLD      "\033[1m"
+#define DIM       "\033[2m"
+#define UNDERLINE "\033[4m"
+#define BLINK     "\033[5m"
+#define REVERSE   "\033[7m"
+#define HIDDEN    "\033[8m"
+
+#define BLACK     "\033[30m"
+#define RED       "\033[31m"
+#define GREEN     "\033[32m"
+#define YELLOW    "\033[33m"
+#define BLUE      "\033[34m"
+#define MAGENTA   "\033[35m"
+#define CYAN      "\033[36m"
+#define WHITE     "\033[37m"
+
+#define BOLDBLACK     "\033[1m\033[30m"
+#define BOLDRED       "\033[1m\033[31m"
+#define BOLDGREEN     "\033[1m\033[32m"
+#define BOLDYELLOW    "\033[1m\033[33m"
+#define BOLDBLUE      "\033[1m\033[34m"
+#define BOLDMAGENTA   "\033[1m\033[35m"
+#define BOLDCYAN      "\033[1m\033[36m"
+#define BOLDWHITE     "\033[1m\033[37m"
+
+#define BG_BLACK   "\033[40m"
+#define BG_RED     "\033[41m"
+#define BG_GREEN   "\033[42m"
+#define BG_YELLOW  "\033[43m"
+#define BG_BLUE    "\033[44m"
+#define BG_MAGENTA "\033[45m"
+#define BG_CYAN    "\033[46m"
+#define BG_WHITE   "\033[47m"
+
+
+
 typedef struct {
     int client_socket;
     struct sockaddr_in client_address;
@@ -71,7 +108,8 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
 
     // Invio della lista al client
     sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
-    printf("%s\n", buffer);
+    printf("\n%s%sLista file inviata al client:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
+    printf("%s%s%s", GREEN, buffer, RESET);
 
     closedir(directory);
     free(buffer);
@@ -159,7 +197,7 @@ int main(int argc, char *argv[]) {
     }
     
 
-    printf("Server in ascolto sulla porta %d\n", DEFAULT_PORT);
+    printf("%sServer in ascolto sulla porta %d...%s\n\n", BOLDRED, DEFAULT_PORT, RESET);
     
 
     while (1) {
@@ -181,8 +219,10 @@ int main(int argc, char *argv[]) {
 
 
         /* stampa messaggi ricevuti */
-        printf("%s: dati da %s:UDP%u : %s \n", argv[0], inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), buffer);        
-        
+        printf("%s%s%s: dati da ", BOLDGREEN, argv[0], RESET);
+        printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
+        printf("%sUDP%u%s : ", MAGENTA, ntohs(client_address.sin_port), RESET);
+        printf("%s%s%s\n", BOLDYELLOW, buffer, RESET);
 
         /* gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {

@@ -75,8 +75,8 @@ void request_file_list(int client_socket, struct sockaddr_in server_address) {
     }       
 
     buffer[bytes_received] = '\0';
-    printf("Lista file ricevuta dal server: %s\n%s\n%s", BOLDGREEN, buffer, RESET);
-
+    printf("\n%s%sLista file ricevuta dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
+    printf("%s%s%s", GREEN, buffer, RESET);
 }
 void request_file(int server_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per richiedere un file al server
@@ -125,9 +125,10 @@ int main() {
 
 
     while (1) { /*Richiesta di input da parte dell'utente*/
-        printf("Inserisci un comando (list, get <nome_file>, put <nome_file>): ");
+        printf("Inserisci un comando (list, get <nome_file>, put <nome_file>): %s", BOLDYELLOW);
         fgets(buffer, MAX_BUFFER_SIZE, stdin);
         buffer[strlen(buffer)-1] = '\0';
+        printf("%s", RESET);
 
 
         // Invio del comando al server
