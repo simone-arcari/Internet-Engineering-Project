@@ -10,37 +10,71 @@
 #include <netinet/in.h>
 
 
+
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
 #define PATH_FILE_FOLDER "file_folder"
+
+
 
 typedef struct {
     int client_socket;
     struct sockaddr_in client_address;
 } ClientInfo;
 
-void send_file_list(int client_socket, struct sockaddr_in client_address) {
+
+
+void send_file_list(int server_socket, struct sockaddr_in client_address) {
     // Implementa la logica per inviare la lista dei file disponibili al client
-    // Utilizza la socket client_socket e l'indirizzo del client client_address
+    // Utilizza la socket server_socket e l'indirizzo del client client_address
     struct dirent *entry;
     DIR *directory;
+    char *buffer, *temp_buffer;
+    int residual_buffer = MAX_BUFFER_SIZE;
+    int entry_len, total_len;
+    int extra_char = 1; //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
+
 
     directory = opendir(PATH_FILE_FOLDER);
 
+
     if (directory == NULL) {
-        //perror("Impossibile aprire la cartella");
         printf("Errore opendir(): %s\n", strerror(errno));
         
+
         exit(EXIT_FAILURE);
     }
 
+
+    buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
+    if (buffer == NULL) {
+        printf("Errore malloc(): %s\n", strerror(errno));
+
+
+        exit(EXIT_FAILURE);
+    }
+
+    temp_buffer = buffer;
     while ((entry = readdir(directory)) != NULL) {
+        entry_len = strlen(entry->d_name);
+        total_len = entry_len+extra_char;
+
         if (entry->d_type == DT_REG) {  // Considera solo i file regolari
-            printf("%s\n", entry->d_name);
+            if (total_len <= residual_buffer && residual_buffer > 0) {
+                sprintf(temp_buffer, "%s\n", entry->d_name);
+                temp_buffer += total_len;
+                residual_buffer -= total_len;
+
+            }
         }
     }
 
+    // Invio della lista al client
+    sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
+    printf("%s\n", buffer);
+
     closedir(directory);
+    free(buffer);
 }
 void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al client
@@ -87,68 +121,84 @@ void receive_file(int client_socket, struct sockaddr_in client_address, char* fi
     return NULL;
 }*/
 
+
+
 int main(int argc, char *argv[]) {
     int server_socket, client_socket, addr_len, bytes_received;
     struct sockaddr_in server_address, client_address;
     char buffer[MAX_BUFFER_SIZE];
     pthread_t tid;
     
+
+
     // Creazione della socket del server
     server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (server_socket < 0) {
-        //perror("Errore");
         printf("Errore socket(): %s\n", strerror(errno));   // Controllare variabile globale errno qui
         
 
         exit(EXIT_FAILURE);
     }
     
+
+
     // Configurazione dell'indirizzo del server
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);     // il server accetta richieste su ogni interfaccia di rete 
     
+
+
     // Associazione dell'indirizzo del server alla socket
     if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {   
-        //perror("Errore");
         printf("Errore bind(): %s\n", strerror(errno));
         
 
         exit(EXIT_FAILURE);
     }
     
+
     printf("Server in ascolto sulla porta %d\n", DEFAULT_PORT);
     
+
     while (1) {
         memset(buffer, 0x0, MAX_BUFFER_SIZE);
         addr_len = sizeof(client_address);
         
+
         // Ricezione del comando dal client
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
-            //perror("Errore recvfrom()");
             printf("Errore recvfrom(): %s\n", strerror(errno));
 
 
             exit(EXIT_FAILURE);
         }
         
+
         buffer[bytes_received] = '\0';
+
 
         /* stampa messaggi ricevuti */
         printf("%s: dati da %s:UDP%u : %s \n", argv[0], inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), buffer);        
         
+
         /* gestore dei comandi */
-        if (strcmp(buffer, "list\n") == 0) {
-            printf("%s", buffer);
-            send_file_list(client_socket, client_address);
+        if (strcmp(buffer, "list") == 0) {
+            send_file_list(server_socket, client_address);
+
+
 
         } else if (strcmp(buffer, "get") == 0) {
             //send_file(client_socket, client_address);
 
+
+
         } else if (strcmp(buffer, "put") == 0) {
             //receive_file(client_socket, client_address);
+
+
 
         } else {
             printf("Comando non riconosciuto\n");
@@ -157,12 +207,7 @@ int main(int argc, char *argv[]) {
         }
         
         
-        
-        
-        
-        
-        
-        
+
         /*
         // Creazione di una struttura ClientInfo per passare le informazioni del client al thread
         ClientInfo *client_info = (ClientInfo *)malloc(sizeof(ClientInfo));
@@ -181,9 +226,7 @@ int main(int argc, char *argv[]) {
         // Detach del thread per permettere la terminazione automatica
         pthread_detach(tid);*/
     }
-    
-    // Chiusura della socket del server
-    //close(server_socket);
+
     
     return EXIT_SUCCESS;
 }

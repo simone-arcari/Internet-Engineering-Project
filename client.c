@@ -10,30 +10,89 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+
+
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-//#define IP_SERVER "192.168.1.22"    // PC FISSO
-#define IP_SERVER "192.168.1.27"    // PC PORTATILE
+#define IP_SERVER "192.168.1.22"    // PC FISSO
+//#define IP_SERVER "192.168.1.27"    // PC PORTATILE
 
-void request_file_list(int server_socket, struct sockaddr_in server_address) {
+
+
+#define RESET     "\033[0m"
+#define BOLD      "\033[1m"
+#define DIM       "\033[2m"
+#define UNDERLINE "\033[4m"
+#define BLINK     "\033[5m"
+#define REVERSE   "\033[7m"
+#define HIDDEN    "\033[8m"
+
+#define BLACK     "\033[30m"
+#define RED       "\033[31m"
+#define GREEN     "\033[32m"
+#define YELLOW    "\033[33m"
+#define BLUE      "\033[34m"
+#define MAGENTA   "\033[35m"
+#define CYAN      "\033[36m"
+#define WHITE     "\033[37m"
+
+#define BOLDBLACK     "\033[1m\033[30m"
+#define BOLDRED       "\033[1m\033[31m"
+#define BOLDGREEN     "\033[1m\033[32m"
+#define BOLDYELLOW    "\033[1m\033[33m"
+#define BOLDBLUE      "\033[1m\033[34m"
+#define BOLDMAGENTA   "\033[1m\033[35m"
+#define BOLDCYAN      "\033[1m\033[36m"
+#define BOLDWHITE     "\033[1m\033[37m"
+
+#define BG_BLACK   "\033[40m"
+#define BG_RED     "\033[41m"
+#define BG_GREEN   "\033[42m"
+#define BG_YELLOW  "\033[43m"
+#define BG_BLUE    "\033[44m"
+#define BG_MAGENTA "\033[45m"
+#define BG_CYAN    "\033[46m"
+#define BG_WHITE   "\033[47m"
+
+
+
+
+
+
+void request_file_list(int client_socket, struct sockaddr_in server_address) {
     // Implementa la logica per richiedere la lista dei file disponibili al server
-    // Utilizza la socket server_socket e l'indirizzo del server server_address
-}
+    // Utilizza la socket client_socket e l'indirizzo del server server_address
+    int bytes_received;
+    char buffer[MAX_BUFFER_SIZE];
 
+
+    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+    if (bytes_received < 0) {
+        printf("Errore recvfrom(): %s\n", strerror(errno));
+
+
+        exit(EXIT_FAILURE);
+    }       
+
+    buffer[bytes_received] = '\0';
+    printf("Lista file ricevuta dal server: %s\n%s\n%s", BOLDGREEN, buffer, RESET);
+
+}
 void request_file(int server_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per richiedere un file al server
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
 }
-
 void receive_file(int server_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per ricevere un file dal server
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
 }
-
 void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al server
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
+
+
+
 
 int main() {
     int client_socket, bytes_received;
