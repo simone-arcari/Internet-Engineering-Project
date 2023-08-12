@@ -14,8 +14,9 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define IP_SERVER "192.168.1.22"    // PC FISSO
+//#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
+#define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
 
 
 
@@ -56,9 +57,6 @@
 
 
 
-
-
-
 void request_file_list(int client_socket, struct sockaddr_in server_address) {
     // Implementa la logica per richiedere la lista dei file disponibili al server
     // Utilizza la socket client_socket e l'indirizzo del server server_address
@@ -78,14 +76,60 @@ void request_file_list(int client_socket, struct sockaddr_in server_address) {
     printf("\n%s%sLista file ricevuta dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
     printf("%s%s%s", GREEN, buffer, RESET);
 }
-void request_file(int server_socket, struct sockaddr_in server_address, char* filename) {
+
+
+void request_file(int client_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per richiedere un file al server
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
+    FILE *file;
+    int bytes_received;
+    char buffer[MAX_BUFFER_SIZE];
+
+
+    // Apertura del file in modalità scrittura binaria
+    file = fopen(filename, "wb");
+    if (file == NULL) {
+        printf("Errore fopen(): %s\n", strerror(errno));
+
+
+        exit(EXIT_FAILURE);
+    }
+
+
+    while (1) {
+        bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+        if (bytes_received < 0) {
+            perror("Errore nella recvfrom");
+            exit(EXIT_FAILURE);
+        }
+
+
+        // Ricezione completata
+        if (bytes_received == 0) {
+
+
+            break;
+        }
+
+        // Scrivi i dati ricevuti nel file
+        fwrite(buffer, 1, bytes_received, file);
+    }
+
+
+    // Chiudi il file
+    fclose(file);
+
+
+    printf("File ricevuto con successo.\n");
 }
+
+
 void receive_file(int server_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per ricevere un file dal server
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
 }
+
+
 void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al server
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
@@ -141,7 +185,7 @@ int main() {
 
 
 
-        } else if (strncmp(buffer, "get", 3) == 0) {    /*Estrapolazione del nome del file dalla richiesta "get"*/          
+        } else if (strncmp(buffer, "get ", 4) == 0) {    /*Estrapolazione del nome del file dalla richiesta "get"*/          
             char* filename = buffer + 4;
             request_file(client_socket, server_address, filename);  // Richiesta del file al server
 

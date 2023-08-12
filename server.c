@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -13,7 +14,7 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define PATH_FILE_FOLDER "file_folder"
+#define PATH_FILE_FOLDER "file_folder_server"
 
 
 
@@ -70,26 +71,43 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     int residual_buffer = MAX_BUFFER_SIZE;
     int entry_len, total_len;
     int extra_char = 1; //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
+    int regular_files = 0;  // Flag per verificare la presenza di file regolari
 
-
+RETRY:
     directory = opendir(PATH_FILE_FOLDER);
 
 
     if (directory == NULL) {
-        printf("Errore opendir(): %s\n", strerror(errno));
-        
+        printf("Errore[%d] opendir(): %s\n",errno , strerror(errno));
 
-        exit(EXIT_FAILURE);
+        // se la cartella non esisteva la creo
+        if (errno == ENOENT) {
+            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {
+                printf("Cartella creata con successo\n");
+                goto RETRY;
+
+            } else {
+                printf("Errore[%d] mkdir(): %s\n",errno , strerror(errno));
+
+
+                exit(EXIT_FAILURE);
+            }
+
+        } else {
+
+            exit(EXIT_FAILURE);
+        }
     }
 
 
     buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
     if (buffer == NULL) {
-        printf("Errore malloc(): %s\n", strerror(errno));
+        printf("Errore[%d] malloc(): %s\n", errno, strerror(errno));
 
 
         exit(EXIT_FAILURE);
     }
+
 
     temp_buffer = buffer;
     while ((entry = readdir(directory)) != NULL) {
@@ -99,12 +117,21 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
         if (entry->d_type == DT_REG) {  // Considera solo i file regolari
             if (total_len <= residual_buffer && residual_buffer > 0) {
                 sprintf(temp_buffer, "%s\n", entry->d_name);
-                temp_buffer += total_len;
                 residual_buffer -= total_len;
+                temp_buffer += total_len;
+                regular_files++;
 
             }
         }
+    }    
+
+
+    if (regular_files == 0) {
+        sprintf(buffer, "%s%s%s\n", BOLDRED, "NESSUN FILE PRESENTE", RESET);
+
+
     }
+
 
     // Invio della lista al client
     sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
@@ -114,14 +141,20 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     closedir(directory);
     free(buffer);
 }
+
+
 void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
+
+
 void receive_file(int client_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per ricevere un file dal client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
 }
+
+
 /*void *handle_client(void *arg) {
     ClientInfo *client_info = (ClientInfo *)arg;
     int client_socket = client_info->client_socket;
@@ -172,7 +205,7 @@ int main(int argc, char *argv[]) {
     // Creazione della socket del server
     server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (server_socket < 0) {
-        printf("Errore socket(): %s\n", strerror(errno));   // Controllare variabile globale errno qui
+        printf("Errore[%d] socket(): %s\n", errno, strerror(errno));   // Controllare variabile globale errno qui
         
 
         exit(EXIT_FAILURE);
@@ -190,7 +223,7 @@ int main(int argc, char *argv[]) {
 
     // Associazione dell'indirizzo del server alla socket
     if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {   
-        printf("Errore bind(): %s\n", strerror(errno));
+        printf("Errore[%d] bind(): %s\n", errno, strerror(errno));
         
 
         exit(EXIT_FAILURE);
@@ -208,7 +241,7 @@ int main(int argc, char *argv[]) {
         // Ricezione del comando dal client
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
-            printf("Errore recvfrom(): %s\n", strerror(errno));
+            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
 
 
             exit(EXIT_FAILURE);
