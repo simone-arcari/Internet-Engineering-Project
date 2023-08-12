@@ -15,7 +15,7 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define PATH_FILE_FOLDER "file_folder_server"
+#define PATH_FILE_FOLDER "file_folder_server"   // Path per la cartella preposta per i file
 
 
 
@@ -55,16 +55,15 @@
 #define BG_WHITE   "\033[47m"
 
 
-
+/* Struttura per passare dati ai threads*/
 typedef struct {
     int client_socket;
     struct sockaddr_in client_address;
 } ClientInfo;
 
 
-
+/* Verifica che la cartella sia presente in caso contrario la creo */
 DIR *check_directory(const char *__name) {
-    // Verifica che la cartella sia presente in caso contrario la crea
     DIR *directory;
 
 
@@ -75,14 +74,14 @@ RETRY:
     if (directory == NULL) {
         printf("Errore[%d] opendir(): %s\n",errno , strerror(errno));
 
-        // se la cartella non esisteva la creo
+        /* se la cartella non esisteva la creo */
         if (errno == ENOENT) {
-            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {
+            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {   // Permessi numerazione ottalle |7|7|5|
                 printf("Cartella creata con successo\n\n");
                 goto RETRY;
 
             } else {
-                printf("Errore[%d] mkdir(): %s\n",errno , strerror(errno));
+                printf("Errore[%d] mkdir(): %s\n", errno , strerror(errno));
 
 
                 exit(EXIT_FAILURE);
@@ -98,21 +97,21 @@ RETRY:
 }
 
 
+/*
+    Implementa la logica per inviare la lista dei file disponibili al client
+    Utilizza la socket server_socket e l'indirizzo del client client_address
+*/
 void send_file_list(int server_socket, struct sockaddr_in client_address) {
-    // Implementa la logica per inviare la lista dei file disponibili al client
-    // Utilizza la socket server_socket e l'indirizzo del client client_address
-
-
     struct dirent *entry;
     DIR *directory;
     char *buffer, *temp_buffer;
     int residual_buffer = MAX_BUFFER_SIZE;
     int entry_len, total_len;
-    int extra_char = 1; //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
+    int extra_char = 1;     //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
     int regular_files = 0;  // Flag per verificare la presenza di file regolari
 
 
-    // Verifico l'esistenza della cartella
+    /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
     if (directory == NULL) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
@@ -122,7 +121,7 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     }
 
 
-    // Alloco memoria
+    /* Alloco memoria */
     buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
     if (buffer == NULL) {
         printf("Errore[%d] malloc(): %s\n", errno, strerror(errno));
@@ -132,14 +131,14 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     }
 
 
-    // Leggo il contenuto della cartella (creo lista file)
+    /* Leggo il contenuto della cartella (creo lista file) */
     temp_buffer = buffer;
     while ((entry = readdir(directory)) != NULL) {
         entry_len = strlen(entry->d_name);
         total_len = entry_len+extra_char;
 
-        if (entry->d_type == DT_REG) {  // Considera solo i file regolari
-            if (total_len <= residual_buffer && residual_buffer > 0) {
+        if (entry->d_type == DT_REG) {  /* Considera solo i file regolari (non conta ad esempio i file "." e "..") */
+            if (total_len <= residual_buffer && residual_buffer > 0) {  /* Gestione del limite di memoria del buffer */
                 sprintf(temp_buffer, "%s\n", entry->d_name);
                 residual_buffer -= total_len;
                 temp_buffer += total_len;
@@ -150,7 +149,7 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     }    
 
 
-    // Se non trovo file la cartella è vuota
+    /* Se non trovo file la cartella è vuota */
     if (regular_files == 0) {
         sprintf(buffer, "%s%s%s\n", BOLDRED, "NESSUN FILE PRESENTE", RESET);
 
@@ -158,7 +157,7 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
     }
 
 
-    // Invio della lista al client
+    /* Invio della lista al client */
     sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
     printf("\n%s%sLista file inviata al client:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
     printf("%s%s%s\n", GREEN, buffer, RESET);
@@ -168,47 +167,49 @@ void send_file_list(int server_socket, struct sockaddr_in client_address) {
 }
 
 
+/*
+    Implementa la logica per inviare un file al client
+    Utilizza la socket server_socket, l'indirizzo del client client_address e il nome del file filename
+*/
 void send_file(int server_socket, struct sockaddr_in client_address, char* filename) {
-    // Implementa la logica per inviare un file al client
-    // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
     DIR *directory;
     FILE *file;
     size_t bytes_read;
     char buffer[MAX_BUFFER_SIZE];
 
 
-    // Verifico l'esistenza della cartella
+    /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
     if (directory == NULL) {
-        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+        printf("Errore[%d] check_directory(): %s\n", errno , strerror(errno));
 
        
         exit(EXIT_FAILURE);
     }
 
 
-    // Compongo il percorso completo del file
+    /* Compongo il percorso completo del file */
     char full_path[MAX_BUFFER_SIZE]; 
     snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
 
 
-    // Apro il file in modalità lettura binaria
+    /* Apro il file in modalità lettura binaria */
     file = fopen(full_path, "rb");
     if (file == NULL) {
-        printf("Errore[%d] fopen(): %s\n",errno , strerror(errno));
+        printf("Errore[%d] fopen(): %s\n", errno , strerror(errno));
 
 
         exit(EXIT_FAILURE);
     }
 
 
-    // Invio dei pacchetti del file al client
+    /* Invio dei pacchetti del file al client */
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         sendto(server_socket, buffer, bytes_read, 0, (struct sockaddr *)&client_address, sizeof(client_address));
     }
 
 
-    // Invio di un pacchetto vuoto come segnale di completamento
+    /* Invio di un pacchetto vuoto come segnale di completamento */
     sendto(server_socket, NULL, 0, 0, (struct sockaddr *)&client_address, sizeof(client_address));
 
 
@@ -217,16 +218,18 @@ void send_file(int server_socket, struct sockaddr_in client_address, char* filen
 }
 
 
+/*
+    Implementa la logica per ricevere un file dal client
+    Utilizza la socket server_socket, l'indirizzo del client client_address e il nome del file filename
+*/
 void receive_file(int server_socket, struct sockaddr_in client_address, char* filename) {
-    // Implementa la logica per ricevere un file dal client
-    // Utilizza la socket server_socket, l'indirizzo del client client_address e il nome del file filename
     DIR *directory;
     FILE *file;
     int bytes_received;
     char buffer[MAX_BUFFER_SIZE];
 
 
-    // Verifico l'esistenza della cartella
+    /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
     if (directory == NULL) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
@@ -236,12 +239,12 @@ void receive_file(int server_socket, struct sockaddr_in client_address, char* fi
     }
 
 
-    // Compongo il percorso completo del file
+    /* Compongo il percorso completo del file */
     char full_path[MAX_BUFFER_SIZE]; 
     snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
 
 
-    // Apertura del file in modalità scrittura binaria
+    /* Apertura del file in modalità scrittura binaria */
     file = fopen(full_path, "wb");
     if (file == NULL) {
         printf("Errore fopen(): %s\n", strerror(errno));
@@ -259,22 +262,20 @@ void receive_file(int server_socket, struct sockaddr_in client_address, char* fi
         }
 
 
-        // Ricezione completata
+        /* Ricezione completata */
         if (bytes_received == 0) {
 
 
             break;
         }
 
-        // Scrivi i dati ricevuti nel file
+
+        /* Scrivo i dati ricevuti nel file */
         fwrite(buffer, 1, bytes_received, file);
     }
 
 
-    // Chiudi il file
-    fclose(file);
-
-
+    fclose(file);   // Chiudo il file
     printf("File ricevuto con successo.\n\n");
 }
 
@@ -325,7 +326,7 @@ int main(int argc, char *argv[]) {
     pthread_t tid;
     
 
-    // Verifico l'esistenza della cartella
+    /* Verifico l'esistenza della cartella preposta per contenere i file */
     if (check_directory(PATH_FILE_FOLDER) == NULL) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
 
@@ -335,7 +336,7 @@ int main(int argc, char *argv[]) {
     
 
 
-    // Creazione della socket del server
+    /* Creazione della socket UDP del server */
     server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (server_socket < 0) {
         printf("Errore[%d] socket(): %s\n", errno, strerror(errno));   // Controllare variabile globale errno qui
@@ -346,7 +347,7 @@ int main(int argc, char *argv[]) {
     
 
 
-    // Configurazione dell'indirizzo del server
+    /* Configurazione dell'indirizzo del server UDP*/
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
@@ -354,7 +355,7 @@ int main(int argc, char *argv[]) {
     
 
 
-    // Associazione dell'indirizzo del server alla socket
+    /* Associazione dell'indirizzo del server alla socket */
     if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {   
         printf("Errore[%d] bind(): %s\n", errno, strerror(errno));
         
@@ -367,12 +368,12 @@ int main(int argc, char *argv[]) {
     
 
     while (1) {
-        memset(buffer, 0x0, MAX_BUFFER_SIZE);
+        memset(buffer, 0, MAX_BUFFER_SIZE);
         addr_len = sizeof(client_address);
         
 
 
-        // Ricezione del comando dal client
+        /* Ricezione del comando dal client */
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -382,10 +383,10 @@ int main(int argc, char *argv[]) {
         }
         
 
-        buffer[bytes_received] = '\0';
+        buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
 
 
-        /* stampa messaggi ricevuti */
+        /* Stampa messaggi ricevuti */
         printf("%s%s%s: dati da ", BOLDGREEN, argv[0], RESET);
         printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
         printf("%sUDP%u%s : ", MAGENTA, ntohs(client_address.sin_port), RESET);
@@ -393,7 +394,7 @@ int main(int argc, char *argv[]) {
 
 
 
-        /* gestore dei comandi */
+        /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
             send_file_list(server_socket, client_address);
 
@@ -412,7 +413,7 @@ int main(int argc, char *argv[]) {
 
 
         } else {
-            printf("Comando non riconosciuto\n");
+            printf("%sComando non riconosciuto%s\n\n", RED, RESET);
 
 
 
