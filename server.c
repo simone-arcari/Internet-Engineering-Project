@@ -63,16 +63,10 @@ typedef struct {
 
 
 
-void send_file_list(int server_socket, struct sockaddr_in client_address) {
-    // Implementa la logica per inviare la lista dei file disponibili al client
-    // Utilizza la socket server_socket e l'indirizzo del client client_address
-    struct dirent *entry;
+DIR *check_directory(const char *__name) {
+    // Verifica che la cartella sia presente in caso contrario la crea
     DIR *directory;
-    char *buffer, *temp_buffer;
-    int residual_buffer = MAX_BUFFER_SIZE;
-    int entry_len, total_len;
-    int extra_char = 1; //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
-    int regular_files = 0;  // Flag per verificare la presenza di file regolari
+
 
 RETRY:
     directory = opendir(PATH_FILE_FOLDER);
@@ -84,7 +78,7 @@ RETRY:
         // se la cartella non esisteva la creo
         if (errno == ENOENT) {
             if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {
-                printf("Cartella creata con successo\n");
+                printf("Cartella creata con successo\n\n");
                 goto RETRY;
 
             } else {
@@ -100,7 +94,35 @@ RETRY:
         }
     }
 
+    return directory;
+}
 
+
+void send_file_list(int server_socket, struct sockaddr_in client_address) {
+    // Implementa la logica per inviare la lista dei file disponibili al client
+    // Utilizza la socket server_socket e l'indirizzo del client client_address
+
+
+    struct dirent *entry;
+    DIR *directory;
+    char *buffer, *temp_buffer;
+    int residual_buffer = MAX_BUFFER_SIZE;
+    int entry_len, total_len;
+    int extra_char = 1; //numero di caratteri extra tra un nome e l'altro (in questo caso solo '\n')
+    int regular_files = 0;  // Flag per verificare la presenza di file regolari
+
+
+    // Verifico l'esistenza della cartella
+    directory = check_directory(PATH_FILE_FOLDER);
+    if (directory == NULL) {
+        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+
+       
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Alloco memoria
     buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
     if (buffer == NULL) {
         printf("Errore[%d] malloc(): %s\n", errno, strerror(errno));
@@ -110,6 +132,7 @@ RETRY:
     }
 
 
+    // Leggo il contenuto della cartella (creo lista file)
     temp_buffer = buffer;
     while ((entry = readdir(directory)) != NULL) {
         entry_len = strlen(entry->d_name);
@@ -127,6 +150,7 @@ RETRY:
     }    
 
 
+    // Se non trovo file la cartella è vuota
     if (regular_files == 0) {
         sprintf(buffer, "%s%s%s\n", BOLDRED, "NESSUN FILE PRESENTE", RESET);
 
@@ -137,22 +161,121 @@ RETRY:
     // Invio della lista al client
     sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
     printf("\n%s%sLista file inviata al client:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
-    printf("%s%s%s", GREEN, buffer, RESET);
+    printf("%s%s%s\n", GREEN, buffer, RESET);
 
     closedir(directory);
     free(buffer);
 }
 
 
-void send_file(int client_socket, struct sockaddr_in client_address, char* filename) {
+void send_file(int server_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per inviare un file al client
     // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
+    DIR *directory;
+    FILE *file;
+    size_t bytes_read;
+    char buffer[MAX_BUFFER_SIZE];
+
+
+    // Verifico l'esistenza della cartella
+    directory = check_directory(PATH_FILE_FOLDER);
+    if (directory == NULL) {
+        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+
+       
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Compongo il percorso completo del file
+    char full_path[MAX_BUFFER_SIZE]; 
+    snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
+
+
+    // Apro il file in modalità lettura binaria
+    file = fopen(full_path, "rb");
+    if (file == NULL) {
+        printf("Errore[%d] fopen(): %s\n",errno , strerror(errno));
+
+
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Invio dei pacchetti del file al client
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        sendto(server_socket, buffer, bytes_read, 0, (struct sockaddr *)&client_address, sizeof(client_address));
+    }
+
+
+    // Invio di un pacchetto vuoto come segnale di completamento
+    sendto(server_socket, NULL, 0, 0, (struct sockaddr *)&client_address, sizeof(client_address));
+
+
+    fclose(file);
+    printf("File inviato con successo.\n\n");
 }
 
 
-void receive_file(int client_socket, struct sockaddr_in client_address, char* filename) {
+void receive_file(int server_socket, struct sockaddr_in client_address, char* filename) {
     // Implementa la logica per ricevere un file dal client
-    // Utilizza la socket client_socket, l'indirizzo del client client_address e il nome del file filename
+    // Utilizza la socket server_socket, l'indirizzo del client client_address e il nome del file filename
+    DIR *directory;
+    FILE *file;
+    int bytes_received;
+    char buffer[MAX_BUFFER_SIZE];
+
+
+    // Verifico l'esistenza della cartella
+    directory = check_directory(PATH_FILE_FOLDER);
+    if (directory == NULL) {
+        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+
+       
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Compongo il percorso completo del file
+    char full_path[MAX_BUFFER_SIZE]; 
+    snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
+
+
+    // Apertura del file in modalità scrittura binaria
+    file = fopen(full_path, "wb");
+    if (file == NULL) {
+        printf("Errore fopen(): %s\n", strerror(errno));
+
+
+        exit(EXIT_FAILURE);
+    }
+
+
+    while (1) {
+        bytes_received = recvfrom(server_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+        if (bytes_received < 0) {
+            perror("Errore nella recvfrom");
+            exit(EXIT_FAILURE);
+        }
+
+
+        // Ricezione completata
+        if (bytes_received == 0) {
+
+
+            break;
+        }
+
+        // Scrivi i dati ricevuti nel file
+        fwrite(buffer, 1, bytes_received, file);
+    }
+
+
+    // Chiudi il file
+    fclose(file);
+
+
+    printf("File ricevuto con successo.\n\n");
 }
 
 
@@ -202,6 +325,15 @@ int main(int argc, char *argv[]) {
     pthread_t tid;
     
 
+    // Verifico l'esistenza della cartella
+    if (check_directory(PATH_FILE_FOLDER) == NULL) {
+        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+
+       
+        exit(EXIT_FAILURE);
+    }
+    
+
 
     // Creazione della socket del server
     server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -239,6 +371,7 @@ int main(int argc, char *argv[]) {
         addr_len = sizeof(client_address);
         
 
+
         // Ricezione del comando dal client
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
@@ -258,25 +391,30 @@ int main(int argc, char *argv[]) {
         printf("%sUDP%u%s : ", MAGENTA, ntohs(client_address.sin_port), RESET);
         printf("%s%s%s\n", BOLDYELLOW, buffer, RESET);
 
+
+
         /* gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
             send_file_list(server_socket, client_address);
 
 
 
-        } else if (strcmp(buffer, "get") == 0) {
-            //send_file(client_socket, client_address);
+        } else if (strncmp(buffer, "get ", 4) == 0) {
+            char* filename = buffer + 4;
+            send_file(server_socket, client_address, filename);
 
 
 
-        } else if (strcmp(buffer, "put") == 0) {
-            //receive_file(client_socket, client_address);
+        } else if (strncmp(buffer, "put ", 4) == 0) {
+            char* filename = buffer + 4;
+            receive_file(server_socket, client_address, filename);
 
 
 
         } else {
             printf("Comando non riconosciuto\n");
-            printf("%s", buffer);
+
+
 
         }
         
@@ -302,5 +440,6 @@ int main(int argc, char *argv[]) {
     }
 
     
+
     return EXIT_SUCCESS;
 }
