@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
-#include <unistd.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -17,6 +18,7 @@
 //#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
 #define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
+#define PATH_FILE_FOLDER "file_folder_client"
 
 
 
@@ -81,13 +83,46 @@ void request_file_list(int client_socket, struct sockaddr_in server_address) {
 void request_file(int client_socket, struct sockaddr_in server_address, char* filename) {
     // Implementa la logica per richiedere un file al server
     // Utilizza la socket server_socket, l'indirizzo del server server_address e il nome del file filename
+    DIR *directory;
     FILE *file;
     int bytes_received;
     char buffer[MAX_BUFFER_SIZE];
 
+    RETRY:
+    directory = opendir(PATH_FILE_FOLDER);
+
+
+    if (directory == NULL) {
+        printf("Errore[%d] opendir(): %s\n",errno , strerror(errno));
+
+        // se la cartella non esisteva la creo
+        if (errno == ENOENT) {
+            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {
+                printf("Cartella creata con successo\n");
+                goto RETRY;
+
+            } else {
+                printf("Errore[%d] mkdir(): %s\n",errno , strerror(errno));
+
+
+                exit(EXIT_FAILURE);
+            }
+
+        } else {
+
+            exit(EXIT_FAILURE);
+        }
+    }
+
+
+    // Compongo il percorso completo del file
+    char full_path[MAX_BUFFER_SIZE]; 
+    snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
+
+
 
     // Apertura del file in modalità scrittura binaria
-    file = fopen(filename, "wb");
+    file = fopen(full_path, "wb");
     if (file == NULL) {
         printf("Errore fopen(): %s\n", strerror(errno));
 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
