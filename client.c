@@ -270,6 +270,17 @@ int main(int argc, char *argv[]) {
     }
 
 
+    /* Per debug */
+    if (argc == 2) {
+        sprintf(buffer, "%s", argv[1]);
+        goto JUMP;
+
+    } else if (argc == 3) {
+        sprintf(buffer, "%s %s", argv[1], argv[2]);
+        goto JUMP;
+
+    }
+
 
     while (1) { /*Richiesta di input da parte dell'utente*/
         printf("%s%s%s: ", BOLDGREEN, argv[0], RESET);
@@ -278,7 +289,7 @@ int main(int argc, char *argv[]) {
         buffer[strlen(buffer)-1] = '\0';
         printf("%s", RESET);
 
-
+JUMP:
         /* Invio del comando al server */
         sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
