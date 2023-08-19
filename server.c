@@ -280,42 +280,44 @@ void receive_file(int server_socket, struct sockaddr_in client_address, char* fi
 }
 
 
-/*void *handle_client(void *arg) {
+void *handle_client(void *arg) {
     ClientInfo *client_info = (ClientInfo *)arg;
     int client_socket = client_info->client_socket;
     struct sockaddr_in client_address = client_info->client_address;
     char buffer[MAX_BUFFER_SIZE];
     
-    // Gestisci la richiesta del client
 
-    // Verifica del comando ricevuto
-        if (strcmp(buffer, "list") == 0) {
-            // Invio della lista dei file disponibili al client
-            send_file_list(client_socket, client_address);
-        } else if (strncmp(buffer, "get", 3) == 0) {
-            // Estrapolazione del nome del file dalla richiesta "get"
-            char* filename = buffer + 4;
+    /* Gestore dei comandi */
+    if (strcmp(buffer, "list") == 0) {
+        send_file_list(client_socket, client_address);
 
-            // Invio del file al client
-            send_file(client_socket, client_address, filename);
-        } else if (strncmp(buffer, "put", 3) == 0) {
-            // Estrapolazione del nome del file dalla richiesta "put"
-            char* filename = buffer + 4;
 
-            // Ricezione del file dal client
-            receive_file(client_socket, client_address, filename);
-        } else {
-            // Comando non valido, invio un messaggio di errore al client
-            strcpy(buffer, "Comando non valido");
-            sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
-        }
+
+    } else if (strncmp(buffer, "get ", 4) == 0) {
+        char* filename = buffer + 4;
+        send_file(client_socket, client_address, filename);
+
+
+
+    } else if (strncmp(buffer, "put ", 4) == 0) {
+        char* filename = buffer + 4;
+        receive_file(client_socket, client_address, filename);
+
+
+
+    } else {
+        printf("%sComando non riconosciuto%s\n\n", RED, RESET);
+
+
+
+    }   
     
     // Chiudi la socket del client
-    close(client_socket);
-    free(client_info);
+    //close(client_socket);
+    //free(client_info);
     
     return NULL;
-}*/
+}
 
 
 
@@ -372,8 +374,8 @@ int main(int argc, char *argv[]) {
         addr_len = sizeof(client_address);
         
 
-
-        /* Ricezione del comando dal client */
+/*
+        /* Ricezione del comando dal client /
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -386,7 +388,7 @@ int main(int argc, char *argv[]) {
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
 
 
-        /* Stampa messaggi ricevuti */
+        /* Stampa messaggi ricevuti /
         printf("%s%s%s: dati da ", BOLDGREEN, argv[0], RESET);
         printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
         printf("%sUDP%u%s : ", MAGENTA, ntohs(client_address.sin_port), RESET);
@@ -394,7 +396,7 @@ int main(int argc, char *argv[]) {
 
 
 
-        /* Gestore dei comandi */
+        /* Gestore dei comandi /
         if (strcmp(buffer, "list") == 0) {
             send_file_list(server_socket, client_address);
 
@@ -418,26 +420,58 @@ int main(int argc, char *argv[]) {
 
 
         }
-        
-        
+ */       
 
-        /*
+
+
+    
+
+
+
+        // HO SBAGLIATO PERCHE STIAMO IN UDP E NON TCP (CORREGERE)
+
+        // Accetta la connessione dal client
+        client_socket = accept(server_socket, (struct sockaddr *)&client_address, &addr_len);
+        if (client_socket == -1) {
+            printf("Errore[%d] accept(): %s\n", errno, strerror(errno));
+
+
+            continue;
+        }
+
+
+
+
+        
         // Creazione di una struttura ClientInfo per passare le informazioni del client al thread
         ClientInfo *client_info = (ClientInfo *)malloc(sizeof(ClientInfo));
+        if (client_info == NULL) {
+            printf("Errore[%d] malloc(sizeof(ClientInfo)): %s\n", errno, strerror(errno));
+
+
+            exit(EXIT_FAILURE);
+        }
+
         client_info->client_socket = client_socket;
         client_info->client_address = client_address;
         
+
+
+
+
+
         // Creazione di un nuovo thread per gestire il client
         if (pthread_create(&tid, NULL, handle_client, (void *)client_info) != 0) {
-            perror("Errore nella creazione del thread");
+            printf("Errore[%d] pthread_create(): %s\n", errno, strerror(errno));
+            close(client_socket);
+            freee(client_info);
+            
 
-            // Controllare variabileglobale errno qui
-
-            exit(1);
+            continue;
         }
         
         // Detach del thread per permettere la terminazione automatica
-        pthread_detach(tid);*/
+        pthread_detach(tid);
     }
 
     

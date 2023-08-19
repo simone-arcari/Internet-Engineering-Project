@@ -15,9 +15,9 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define IP_SERVER "192.168.1.22"    // PC FISSO
+//#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-//#define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
+#define IP_SERVER "172.20.10.2"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"
 
 
