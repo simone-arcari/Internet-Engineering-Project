@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -58,6 +58,10 @@
 #define BG_WHITE   "\033[47m"
 
 
+int client_socket;
+struct sockaddr_in server_address;
+
+
 
 /* Verifica che la cartella sia presente in caso contrario la creo */
 DIR *check_directory(const char *__name) {
@@ -91,6 +95,56 @@ RETRY:
     }
 
     return directory;
+}
+
+/*
+    Implementa la logica per richiedere una connessione ad un server UDP
+    Utilizza la socket client_socket e l'indirizzo del client server_address
+*/
+int connect_server(int client_socket, struct sockaddr_in server_address) {
+    int bytes_received;
+    char buffer[MAX_BUFFER_SIZE] = "connect";
+
+
+    /* Invio del comando al server */
+    sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+
+
+    /* Imposto scadenza del timer */
+    alarm(5);
+
+
+    /* Risposta del server */
+    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+    if (bytes_received < 0) {
+        printf("Errore recvfrom(): %s\n", strerror(errno));
+
+
+        return EXIT_ERROR;
+    } 
+
+
+    buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
+
+
+    /* Reset scadenza del timer */
+    alarm(0);
+
+
+    /* Esito della connessione */
+    if (strcmp(buffer, "connected") == 0) {
+        printf("SERVER CONNESSO\n");
+
+
+        return EXIT_SUCCESS;
+    } else {
+        printf("SERVER NON CONNESSO\n");
+
+
+        return EXIT_ERROR;
+    }
+
+    
 }
 
 
@@ -243,13 +297,76 @@ int upload_file(int client_socket, struct sockaddr_in server_address, char* file
 }
 
 
+/*
+    Funzione di gestione del segnale SIGINT
+*/
+void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
+    char buffer[MAX_BUFFER_SIZE] = "close";
+
+
+    printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+    
+
+    /* Invio del comando al server */
+    sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+
+
+    if (close(client_socket) < 0) {
+        printf("Errore close(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
+    }
+
+    exit(EXIT_SUCCESS);
+}
+
+
+/*
+    Funzione di gestione del segnale SIGALARM
+*/
+void handle_alarm(int signum) {
+    printf("CONNESSIONE NON RIUSCITA, TIMER SCADUTO\n");
+    printf("%sExiting...%s\n", BOLDYELLOW, RESET);
+
+
+    exit(EXIT_SUCCESS);
+}
+
 
 int main(int argc, char *argv[]) {
-    int client_socket;
     int bytes_received;
-    struct sockaddr_in server_address;
     char buffer[MAX_BUFFER_SIZE];
+    struct sigaction sa1;
+    struct sigaction sa2;
+    
 
+    /* Configurazione di sigaction per Ctrl+c */
+    sa1.sa_sigaction = handle_ctrl_c;    // funzione di gestione del segnale
+    sa1.sa_flags = SA_SIGINFO;           // abilita l'uso di siginfo_t
+
+
+    /* Configurazione di sigaction per il timer di fine tentativo di connessione */
+    sa2.sa_handler = handle_alarm;      // Funzione di gestione del segnale
+    sigemptyset(&sa2.sa_mask);          // Pulisco la maschera dei segnali
+
+
+    /* Imposto l'handler per SIGINT (Ctrl+C) */
+    if (sigaction(SIGINT, &sa1, NULL) < 0) {
+        printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
+
+
+    /* Imposto l'handler per SIGALRM */
+    if (sigaction(SIGALRM, &sa2, NULL) == -1) {
+        printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
 
 
     /* Verifico l'esistenza della cartella preposta per contenere i file */
@@ -259,7 +376,6 @@ int main(int argc, char *argv[]) {
        
         exit(EXIT_FAILURE);
     }
-
 
 
     /* Creazione della socket UDP del client */
@@ -272,12 +388,20 @@ int main(int argc, char *argv[]) {
     }
 
 
-
     /* Configurazione dell'indirizzo del server */
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
     if (inet_pton(AF_INET, IP_SERVER, &server_address.sin_addr) < 0) {
         printf("Errore inet_pton(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
+    }
+
+
+    /* Connessione al server */
+    if (connect_server(client_socket, server_address) < 0) {
+        printf("Errore connect_server(): %s\n", strerror(errno)); 
 
 
         exit(EXIT_FAILURE);
@@ -341,26 +465,13 @@ JUMP:
 
         } else if (strcmp(buffer, "close") == 0) {  /*Chiusura programma e chiusura della socket del client*/
             if (close(client_socket) < 0) {
-                perror("Errore nella chiusura della socket");
+                printf("Errore close(): %s\n", strerror(errno)); 
 
 
                 exit(EXIT_FAILURE);
             }
 
             exit(EXIT_SUCCESS);
-
-
-        } else {    /*Comando non valido, ricevo un messaggio di errore dal server*/
-            /*
-            bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
-            if (bytes_received < 0) {
-                perror("Errore nella ricezione del messaggio di errore dal server");
-                exit(1);
-            }
-
-            buffer[bytes_received] = '\0';
-            printf("Errore: %s\n", buffer);
-            */
         }
     }
 

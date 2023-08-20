@@ -2,20 +2,20 @@
     gcc server.c -o server -lpthread
 
 
-    se il main termina devo:
-    chiudere la socket
-    chiudere i mutex
+
+    
+
+    verificare il ritorno di sendto
 
 
-
-    gestire connect automatica client
-    vedere casi errori mutex
+    rivedere gestione get put file nel contesto di piu client
 */
 
 
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <stdlib.h>
@@ -70,6 +70,12 @@
 #define BG_WHITE   "\033[47m"
 
 
+/* Variabili globali */
+int server_socket;
+struct sockaddr_in client_address;
+pthread_mutex_t mutex;
+
+
 /* Struttura per passare dati ai threads*/
 typedef struct {
     int server_socket;
@@ -85,18 +91,31 @@ int send_file_list(int server_socket, struct sockaddr_in client_address);
 int send_file(int server_socket, struct sockaddr_in client_address, char* filename);
 int receive_file(int server_socket, struct sockaddr_in client_address, char* filename);
 void *handle_client(void *arg);
+void handle_ctrl_c(int signum, siginfo_t *info, void *context);
 
 
 
 
 int main(int argc, char *argv[]) {
-    int server_socket;
-    int client_socket;
     int addr_len;
     int bytes_received;
-    struct sockaddr_in server_address, client_address;
+    struct sockaddr_in server_address;
     char buffer[MAX_BUFFER_SIZE];
-    pthread_mutex_t mutex;
+    struct sigaction sa;
+    
+
+    /* Configurazione di sigaction */
+    sa.sa_sigaction = handle_ctrl_c;    // funzione di gestione del segnale
+    sa.sa_flags = SA_SIGINFO;           // abilita l'uso di siginfo_t
+
+
+    /* Imposta l'handler per SIGINT (Ctrl+C) */
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
     
 
     /* Inizializzo il mutex */
@@ -105,13 +124,12 @@ int main(int argc, char *argv[]) {
 
     /* Verifico l'esistenza della cartella preposta per contenere i file */
     if (check_directory(PATH_FILE_FOLDER) == NULL) {
-        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+        printf("Errore[%d] check_directory(): %s\n", errno , strerror(errno));
 
        
         exit(EXIT_FAILURE);
     }
     
-
 
     /* Creazione della socket UDP del server */
     server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -123,14 +141,12 @@ int main(int argc, char *argv[]) {
     }
     
 
-
     /* Configurazione dell'indirizzo del server UDP */
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(DEFAULT_PORT);
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);     // il server accetta richieste su ogni interfaccia di rete 
     
-
 
     /* Associazione dell'indirizzo del server alla socket */
     if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {   
@@ -149,11 +165,9 @@ int main(int argc, char *argv[]) {
         addr_len = sizeof(client_address);
 
 
-
         /* Blocco il mutex prima di leggere dalla socket */
         pthread_mutex_lock(&mutex);
         
-
 
         /* Ricezione del comando(di connessione) dal client utilizzando MSG_PEEK per non consumare i dati */
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
@@ -187,12 +201,6 @@ int main(int argc, char *argv[]) {
         } 
 
 
-
-        /* Sblocco il mutex dopo aver letto dalla socket */
-        pthread_mutex_unlock(&mutex);
-
-
-
         /* Stampa messaggi ricevuti */
         printf("%s%s%s: dati da ", BOLDGREEN, argv[0], RESET);
         printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
@@ -200,10 +208,10 @@ int main(int argc, char *argv[]) {
         printf("%s%s%s\n", BOLDYELLOW, buffer, RESET);
 
 
-
         /* Gestore del comando */
         if (strcmp(buffer, "connect") == 0) {
             printf("TENTATIVO DI CONNESSIONE\n");
+
             if (accept_client(server_socket, client_address, &mutex) < 0) {
                 printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
                 
@@ -216,44 +224,10 @@ int main(int argc, char *argv[]) {
 
 
         }
-/*
-        /* Gestore dei comandi /
-        if (strcmp(buffer, "list") == 0) {
-            send_file_list(server_socket, client_address);
 
 
-
-        } else if (strncmp(buffer, "get ", 4) == 0) {
-            char* filename = buffer + 4;
-            send_file(server_socket, client_address, filename);
-
-
-
-        } else if (strncmp(buffer, "put ", 4) == 0) {
-            char* filename = buffer + 4;
-            receive_file(server_socket, client_address, filename);
-
-
-
-        } else {
-            printf("%sComando non riconosciuto%s\n\n", RED, RESET);
-
-
-
-        }
-*/       
-/*
-        // HO SBAGLIATO PERCHE STIAMO IN UDP E NON TCP (CORREGERE)
-
-        // Accetta la connessione dal client
-        client_socket = accept(server_socket, (struct sockaddr *)&client_address, &addr_len);
-        if (client_socket == -1) {
-            printf("Errore[%d] accept(): %s\n", errno, strerror(errno));
-
-
-            continue;
-        }
-*/
+        /* Sblocco il mutex dopo aver letto dalla socket ed accettato la conessione*/
+        pthread_mutex_unlock(&mutex);
     }
 
     
@@ -308,6 +282,14 @@ RETRY:
 int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer) {
     ClientInfo *client_info;
     pthread_t tid;
+    char buffer[MAX_BUFFER_SIZE];
+
+    /* Invio conferma della connessione */
+    sprintf(buffer, "connected");
+    sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address));
+
+
+    printf("CLIENT CONNESSO\n");
 
 
     // Creazione di una struttura ClientInfo per passare le informazioni del client al thread
@@ -375,6 +357,9 @@ int send_file_list(int server_socket, struct sockaddr_in client_address) {
 
         return EXIT_ERROR;
     }
+
+
+    memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
     /* Leggo il contenuto della cartella (creo lista file) */
@@ -453,6 +438,9 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     }
 
 
+    memset(buffer, 0, MAX_BUFFER_SIZE);
+
+
     /* Invio dei pacchetti del file al client */
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         sendto(server_socket, buffer, bytes_read, 0, (struct sockaddr *)&client_address, sizeof(client_address));
@@ -508,6 +496,9 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
     }
 
 
+    memset(buffer, 0, MAX_BUFFER_SIZE);
+
+
     while (1) {
         bytes_received = recvfrom(server_socket, buffer, sizeof(buffer), 0, NULL, NULL);
         if (bytes_received < 0) {
@@ -553,7 +544,7 @@ void *handle_client(void *arg) {
     int server_socket = client_info->server_socket;
     pthread_t tid = pthread_self();
     pthread_mutex_t *mutex_pointer = client_info->mutex_pointer;
-
+        
 
     printf("THREAD[%ld] AVVIATO\n", tid);
 
@@ -602,8 +593,6 @@ void *handle_client(void *arg) {
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
 
 
-
-
         /* Stampa messaggi ricevuti */
         printf("%sthread[%ld]%s: dati da ", BOLDGREEN, tid, RESET);
         printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
@@ -642,7 +631,7 @@ void *handle_client(void *arg) {
 
 
         } else if (strcmp(buffer, "close") == 0) {
-            printf("THREAD[%ld] AVVIATO\n", tid);
+            printf("THREAD[%ld] TERMINATO\n", tid);
             free(client_info);
             pthread_exit(NULL);
 
@@ -658,5 +647,24 @@ void *handle_client(void *arg) {
 }
 
 
+/*
+    Funzione di gestione del segnale SIGINT
+*/
+void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
+    printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+    
+    
+    // invia segnale a tutti i client (serve lista client)
 
+    pthread_mutex_destroy(&mutex); // Distrugge il mutex
+
+    if (close(server_socket) < 0) {
+        printf("Errore close(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
+    }
+
+    exit(EXIT_SUCCESS);
+}
 
