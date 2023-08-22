@@ -135,6 +135,11 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
     if (strcmp(buffer, "connected") == 0) {
         printf("SERVER CONNESSO\n");
 
+        
+        /* Invio del comando al server */
+        snprintf(buffer, MAX_BUFFER_SIZE, "ack");
+        sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+
 
         return EXIT_SUCCESS;
     } else {
