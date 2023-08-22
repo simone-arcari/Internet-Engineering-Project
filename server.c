@@ -1,7 +1,7 @@
 /*
     gcc server.c -o server -lpthread
 
-
+    PROBLEMA MUTEX get nome
 
     vedere se il file non esiste o errore-->muore il thread
 
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
         addr_len = sizeof(client_address);
-
+printf("SONO VIVO\n");
 
         /* Blocco il mutex prima di leggere dalla socket */
         pthread_mutex_lock(&mutex);
@@ -551,7 +551,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
 
         if (errno == ENOENT) {
             // inviare comando di file mancante
-
+            printf("FILE INESISTENTE\n");
 
             return EXIT_ERROR;
         } else {
@@ -606,7 +606,7 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
     FILE *file;
     DIR *directory;
     struct sockaddr_in client_address_expected = client_address;
-printf("0000000\n");
+
 
     /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
@@ -779,7 +779,7 @@ void *handle_client(void *arg) {
 
         /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
-            if (send_file_list(server_socket, client_address, &mutex) < 0) {
+            if (send_file_list(server_socket, client_address, mutex_pointer) < 0) {
                 printf("THREAD[%ld] TERMINATO\n", tid);
                 pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
@@ -794,7 +794,7 @@ void *handle_client(void *arg) {
 
         } else if (strncmp(buffer, "get ", 4) == 0) {
             char* filename = buffer + 4;
-            if (send_file(server_socket, client_address, filename, &mutex) < 0) {
+            if (send_file(server_socket, client_address, filename, mutex_pointer) < 0) {
                 printf("THREAD[%ld] TERMINATO\n", tid);
                 pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
@@ -809,7 +809,7 @@ void *handle_client(void *arg) {
 
         } else if (strncmp(buffer, "put ", 4) == 0) {
             char* filename = buffer + 4;
-            if (receive_file(server_socket, client_address, filename, &mutex) < 0) {
+            if (receive_file(server_socket, client_address, filename, mutex_pointer) < 0) {
                 printf("THREAD[%ld] TERMINATO\n", tid);
                 pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
