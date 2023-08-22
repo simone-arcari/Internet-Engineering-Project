@@ -18,6 +18,7 @@
         "stdlib.h": "c",
         "string.h": "c",
         "socket.h": "c",
-        "inet.h": "c"
+        "inet.h": "c",
+        "netdb.h": "c"
     }
 }

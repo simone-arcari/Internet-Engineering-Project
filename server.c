@@ -8,7 +8,7 @@
     
 */
 
-
+#include <time.h>
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
@@ -283,7 +283,12 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     int addr_len;
     int bytes_received;
     ClientInfo *client_info;
+    struct sockaddr_in client_address_expected = client_address;
     pthread_t tid;
+    time_t start_time;
+    time_t current_time;
+    time_t elapsed_time;
+    int max_duration = 5;               // durata massima in secondi del timer
     char buffer[MAX_BUFFER_SIZE];
 
 
@@ -301,22 +306,62 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     }
 
 
-    memset(buffer, 0, MAX_BUFFER_SIZE);
+    start_time = time(NULL);     // tempo di inizio del timer
+
+    while (1) {
+        memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
-    /* Ricezione messaggio di ACK per connessione a tre vie */
-    bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
-    if (bytes_received < 0) {
-        printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+        /* Calcolo il tempo trascorso */
+        time_t current_time = time(NULL);
+        elapsed_time = current_time - start_time;
 
 
-        return EXIT_ERROR;
+        /* Esco dal ciclo se sono passati più di 5 secondi */
+        if (elapsed_time >= max_duration) {
+            printf("CONNESSIONE NON RIUSCITA, TIMER SCADUTO\n");
+
+
+            break;
+        }
+
+
+        /* Ricezione messaggio di ACK per connessione a tre vie senza consumare i dati*/
+        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
+        if (bytes_received < 0) {
+            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+
+
+            return EXIT_ERROR;
+        }
+
+
+        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti */
+        if (memcmp(&client_address, &client_address_expected, addr_len) != 0) {
+
+
+            continue; // in caso non corrispondano ignoro il messaggio e riteno fino allo scadere del timer
+        }
+
+
+        /* Consumazione effettiva dei dati dalla socket */
+        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
+        if (bytes_received < 0) {
+            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+
+
+            return EXIT_ERROR;
+        }
+
+
+        buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
+        break; // se sono arrivato qui esco dal ciclo
     }
 
-printf("%s\n", buffer);
+
+    /* Verifico il messaggio ricevuto */
     if (strcmp(buffer, "ack") == 0) { 
         printf("CLIENT CONNESSO\n");
-
 
     } else {
         printf("CLIENT NON CONNESSO\n");
