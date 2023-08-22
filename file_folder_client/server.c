@@ -738,8 +738,6 @@ void *handle_client(void *arg) {
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            pthread_mutex_unlock(mutex_pointer);
-            free(client_info);
 
 
             pthread_exit(NULL);
@@ -760,7 +758,6 @@ void *handle_client(void *arg) {
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
             pthread_mutex_unlock(mutex_pointer);
-            free(client_info);
 
 
             pthread_exit(NULL);
@@ -780,8 +777,6 @@ void *handle_client(void *arg) {
         /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
             if (send_file_list(server_socket, client_address, &mutex) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
-                pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
 
                 // chiudere la connessione + messaggio errore
@@ -795,8 +790,6 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "get ", 4) == 0) {
             char* filename = buffer + 4;
             if (send_file(server_socket, client_address, filename, &mutex) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
-                pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
 
                 // chiudere la connessione + messaggio errore
@@ -810,8 +803,6 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "put ", 4) == 0) {
             char* filename = buffer + 4;
             if (receive_file(server_socket, client_address, filename, &mutex) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
-                pthread_mutex_unlock(mutex_pointer);
                 free(client_info);
 
                 // chiudere la connessione + messaggio errore
@@ -824,7 +815,6 @@ void *handle_client(void *arg) {
 
         } else if (strcmp(buffer, "close") == 0) {
             printf("THREAD[%ld] TERMINATO\n", tid);
-            pthread_mutex_unlock(mutex_pointer);
             free(client_info);
 
 
