@@ -15,9 +15,9 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define IP_SERVER "192.168.1.22"    // PC FISSO
+//#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-//#define IP_SERVER "172.20.10.2"     // PER PROVE FUORI CASA
+#define IP_SERVER "192.168.1.78"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
 
@@ -263,7 +263,7 @@ int upload_file(int client_socket, struct sockaddr_in server_address, char* file
     if (directory == NULL) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
 
-       
+
         return EXIT_ERROR;
     }
 
@@ -313,7 +313,7 @@ void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
     
 
     /* Invio del comando al server */
-    sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+    //sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
 
     if (close(client_socket) < 0) {

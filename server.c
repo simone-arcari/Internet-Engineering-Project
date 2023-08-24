@@ -2,19 +2,10 @@
     gcc server.c -o server -lpthread
 
 
-    studiare meglio il caso di addr_len
-
-
-    dimensione frammenti file inviati
-
-
     prima o poi passare tutto in una libreria
 
 
     compattare il codice in sottofunzioni
-
-
-    vedi cosa ritornano i mutex
 
 
     in caso errore chiudere la connessione con il client in questione
@@ -715,7 +706,8 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
-        /* Blocco per implementare una logica affidapthread_mutex_lock
+        /* Blocco per implementare una logica affidapthread_mutex_lock */
+        if (mutex_lock(mutex_pointer) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
@@ -859,7 +851,7 @@ void *handle_client(void *arg) {
 
 
         /* Blocco il mutex prima di leggere dalla socket */
-        if (mutex_lock(&mutex) < 0) {
+        if (mutex_lock(mutex_pointer) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
             free(client_info);
         
