@@ -1,5 +1,8 @@
-/*
+put server.c/*
     gcc server.c -o server -lpthread
+
+
+    mutex in caso errori finire mutex_lock
 
 
     studiare meglio il caso di addr_len
@@ -42,19 +45,6 @@
 
 
 #define MAX_BUFFER_SIZE 1024
-
-
-#define SMALL_SIZE  1024        // 1kB valore oltre il quale si considera un file "small" prima di questo valore lo si considera "micro"
-#define MEDIUM_SIZE 10240       // 10kB valore oltre il quale si considera un file "medium"
-#define LARGE_SIZE  1048576     // 1MB valore oltre il quale si considera un file "large"
-
-
-#define FRAGMENT_MICRO_SIZE     512     // 512 byte dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_SMALL_SIZE     1024    // 1kB dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_MEDIUM_SIZE    8192    // 8kB dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_LARGE_SIZE     65536   // 64kB dimensione dei frammenti del dile passati al livello di trasporto
-
-
 #define DEFAULT_PORT 8888
 #define PATH_FILE_FOLDER "file_folder_server"   // path per la cartella preposta per contenere i file
 #define EXIT_ERROR -1
@@ -556,9 +546,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     DIR *directory;
     FILE *file;
     size_t bytes_read;
-    long file_size;
-    long buffer_size;
-    char *buffer;
+    char buffer[MAX_BUFFER_SIZE];
     char full_path[MAX_BUFFER_SIZE]; 
 
 
@@ -593,47 +581,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     }
 
 
-    /* Ricavo le dimesioni del file */
-    fseek(file, 0, SEEK_END);   // Posiziono il cursore alla fine del file
-    file_size = ftell(file);    // Ottengo la posizione corrente del cursore (che è la dimensione del file)
-    fseek(file, 0, SEEK_SET);   // Riporta il cursore all'inizio del file
-
-
-    /* Assegno dimensione del buffer */
-    if (file_size < SMALL_SIZE) {
-        buffer_size = FRAGMENT_MICRO_SIZE;
-
-
-    } else if (file_size < MEDIUM_SIZE) {
-        buffer_size = FRAGMENT_SMALL_SIZE;
-
-
-    } else if (buffer_size < LARGE_SIZE) {
-        buffer_size = FRAGMENT_MEDIUM_SIZE;
-
-
-    } else {
-        buffer_size = FRAGMENT_LARGE_SIZE;
-
-
-    }
-
-
-    /* Alloco memoria */
-    buffer = (char *)malloc(buffer_size * sizeof(char));
-    if (buffer == NULL) {
-        printf("Errore[%d] malloc(): %s\n", errno, strerror(errno));
-
-
-        return EXIT_ERROR;
-    }
-
-
-    memset(buffer, 0, buffer_size);
-
-
-    printf("DIMENSIONE FILE: %ld BYTE\n", file_size);
-    printf("TAGLIA FRAMMENTI FILE: %ld BYTE\n", buffer_size);
+    memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
     /* Invio dei pacchetti del file al client */
@@ -657,7 +605,6 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     }
 
 
-    free(buffer);
     fclose(file);
     closedir(directory);
     printf("FILE INVIATO CON SUCCESSO\n\n");
@@ -715,7 +662,8 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
-        /* Blocco per implementare una logica affidapthread_mutex_lock
+        /* Blocco per implementare una logica affidabile */
+        if (mutex_lock(&mutex) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
