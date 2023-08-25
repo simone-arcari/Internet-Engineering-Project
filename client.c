@@ -63,13 +63,15 @@ struct sockaddr_in server_address;
 
 
 
-/* Verifica che la cartella sia presente in caso contrario la creo */
-DIR *check_directory(const char *__name) {
+/* 
+    Verifica che la cartella sia presente in caso contrario la creo
+*/
+DIR *check_directory(const char *path_name) {
     DIR *directory;
 
 
 RETRY:
-    directory = opendir(PATH_FILE_FOLDER);
+    directory = opendir(path_name);
 
 
     if (directory == NULL) {
@@ -77,7 +79,7 @@ RETRY:
 
         /* se la cartella non esisteva la creo */
         if (errno == ENOENT) {
-            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {   // Permessi numerazione ottalle |7|7|5|
+            if (mkdir(PATH_FILE_FOLDER, 0755) == 0) {   // permessi numerazione ottale |7|7|5|
                 printf("Cartella creata con successo\n\n");
                 goto RETRY;
 
@@ -142,6 +144,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
         return EXIT_SUCCESS;
+        
     } else {
         printf("SERVER NON CONNESSO\n");
 
@@ -157,7 +160,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
     Implementa la logica per richiedere la lista dei file disponibili al server
     Utilizza la socket client_socket e l'indirizzo del server server_address
 */
-int receive_file_list(int client_socket, struct sockaddr_in server_address) {
+int receive_file_list(int client_socket) {
     int bytes_received;
     char buffer[MAX_BUFFER_SIZE];
 
@@ -184,7 +187,7 @@ int receive_file_list(int client_socket, struct sockaddr_in server_address) {
     Implementa la logica per ricevere un file dal server
     Utilizza la socket client_socket, l'indirizzo del client server_address e il nome del file filename
 */
-int download_file(int client_socket, struct sockaddr_in server_address, char* filename) {
+int download_file(int client_socket, char* filename) {
     DIR *directory;
     FILE *file;
     int bytes_received;
@@ -305,7 +308,7 @@ int upload_file(int client_socket, struct sockaddr_in server_address, char* file
 /*
     Funzione di gestione del segnale SIGINT
 */
-void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
+void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((unused)) *info, void __attribute__((unused)) *context) {
     char buffer[MAX_BUFFER_SIZE] = "close";
 
 
@@ -330,7 +333,7 @@ void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
 /*
     Funzione di gestione del segnale SIGALARM
 */
-void handle_alarm(int signum) {
+void handle_alarm(int __attribute__((unused)) signum) {
     printf("CONNESSIONE NON RIUSCITA, TIMER SCADUTO\n");
     printf("%sExiting...%s\n", BOLDYELLOW, RESET);
 
@@ -340,7 +343,6 @@ void handle_alarm(int signum) {
 
 
 int main(int argc, char *argv[]) {
-    int bytes_received;
     char buffer[MAX_BUFFER_SIZE];
     struct sigaction sa1;
     struct sigaction sa2;
@@ -361,7 +363,7 @@ int main(int argc, char *argv[]) {
         printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
         
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -370,7 +372,7 @@ int main(int argc, char *argv[]) {
         printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
         
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -379,7 +381,7 @@ int main(int argc, char *argv[]) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
 
        
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -389,7 +391,7 @@ int main(int argc, char *argv[]) {
         printf("Errore socket(): %s\n", strerror(errno)); 
 
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -400,7 +402,7 @@ int main(int argc, char *argv[]) {
         printf("Errore inet_pton(): %s\n", strerror(errno)); 
 
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -409,7 +411,7 @@ int main(int argc, char *argv[]) {
         printf("Errore connect_server(): %s\n", strerror(errno)); 
 
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
@@ -425,7 +427,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    /*Richiesta di input da parte dell'utente*/
+    /* Richiesta di input da parte dell'utente */
     while (1) { 
         printf("%s%s%s: ", BOLDGREEN, argv[0], RESET);
         printf("Inserisci un comando (list, get <nome_file>, put <path/nome_file>): %s", BOLDYELLOW);
@@ -440,20 +442,20 @@ JUMP:
 
         /* Gestore del comando inviato */
         if (strcmp(buffer, "list") == 0) {  /* Richiesta della lista dei file disponibili al server*/
-            if (receive_file_list(client_socket, server_address) < 0) {
+            if (receive_file_list(client_socket) < 0) {
 
 
-                // stampa errore ma non terminare
+                return EXIT_FAILURE;
             }
 
 
 
         } else if (strncmp(buffer, "get ", 4) == 0) {    /* Download file dal server*/          
             char* filename = buffer + 4;
-            if (download_file(client_socket, server_address, filename) < 0) {
+            if (download_file(client_socket, filename) < 0) {
 
 
-                // stampa errore ma non terminare
+                return EXIT_FAILURE;
             }
 
 
@@ -463,20 +465,20 @@ JUMP:
             if (upload_file(client_socket, server_address, filename) < 0) {
 
 
-                // stampa errore ma non terminare
+                return EXIT_FAILURE;
             }
 
 
 
-        } else if (strcmp(buffer, "close") == 0) {  /*Chiusura programma e chiusura della socket del client*/
+        } else if (strcmp(buffer, "close") == 0) {  /* Chiusura programma e chiusura della socket del client */
             if (close(client_socket) < 0) {
                 printf("Errore close(): %s\n", strerror(errno)); 
 
 
-                exit(EXIT_FAILURE);
+                return EXIT_FAILURE;
             }
 
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         }
     }
 
