@@ -8,12 +8,15 @@ NOTA:   in this implementation of lists we use the assert.h library for
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <netinet/in.h>	// includo la libreria per sockaddr_in
+#include <arpa/inet.h>	// includo la libreria per inet_ntoa() e ntohs()
 #include "singly_linked_list_opt.h"
 
 
-bool is_empty(node_t **head) {
+bool is_empty(list_t list) {
 /*******************************************************************************
  *
  * Description:
@@ -24,6 +27,8 @@ bool is_empty(node_t **head) {
  *      [out] return bool
  *
  ******************************************************************************/
+	node_t **head = list;
+	
 	assert(head!=NULL);
 	return *head==NULL;
 }
@@ -70,13 +75,10 @@ node_t *create_list(void) {
  *
  ******************************************************************************/
 	node_t *head = malloc(sizeof(node_t*));
-	if (!head) exit(EXIT_FAILURE);
-	
-	head = NULL;
 	return head;
 }
 
-node_t *delete_list(node_t **head) {
+node_t *delete_list(list_t list) {
 /*******************************************************************************
  *
  * Description:
@@ -88,8 +90,9 @@ node_t *delete_list(node_t **head) {
  *      [out] return: NULL pointer 
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	
+	node_t **head = list;
 	node_t *temp;
 	
 	/* deallocates all nodes in the list */
@@ -104,7 +107,7 @@ node_t *delete_list(node_t **head) {
 	return NULL;
 }
 
-node_t *insert_first(node_t **head, int value) {
+node_t *insert_first(list_t list, struct sockaddr_in client_address) {
 /*******************************************************************************
  *
  * Description:
@@ -117,20 +120,21 @@ node_t *insert_first(node_t **head, int value) {
  *      [out] return new: pointer to the inseted node 
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	
+	node_t **head = list;
 	node_t *new = malloc(sizeof(node_t));
 	if (!new) exit(EXIT_FAILURE);
 	
 	
 	new->next = *head;
 	*head = new;
-	new->value = value;
+	new->client_address = client_address;
 	
 	return new;
 }
 
-node_t *insert(node_t **head, node_t *pos, int value) {
+node_t *insert(list_t list, node_t *pos, struct sockaddr_in client_address) {
 /*******************************************************************************
  *
  * Description:
@@ -144,9 +148,11 @@ node_t *insert(node_t **head, node_t *pos, int value) {
  *      [out] return new: pointer to the inseted node 
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	
-	if(!pos) return insert_first(head, value);
+	node_t **head = list;
+
+	if(!pos) return insert_first(head, client_address);
 	
 	
 	while (head && *head != pos->next)
@@ -157,7 +163,7 @@ node_t *insert(node_t **head, node_t *pos, int value) {
 		node_t *new = malloc(sizeof(node_t));
 		if (!new) exit(EXIT_FAILURE);
 		
-		new->value = value;
+		new->client_address = client_address;
 		new->next = *head;
 		*head = new;
 		return new;
@@ -165,7 +171,7 @@ node_t *insert(node_t **head, node_t *pos, int value) {
 	return NULL;
 }
 
-node_t *remove_node(node_t **head, node_t *pos) {
+node_t *remove_node(list_t list, node_t *pos) {
 /*******************************************************************************
  *
  * Description:
@@ -178,8 +184,17 @@ node_t *remove_node(node_t **head, node_t *pos) {
  *      [out] return temp: pointer to the node preceding the one removed
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	assert(pos!=NULL);
+
+	node_t **head = list;
+
+	if(*head == pos) {
+		*head= pos->next;
+		free(pos);
+
+		return *head;
+	}
 
 	while(*head && (*head)->next != pos) 
 		head = &(*head)->next; // increment the position
@@ -207,7 +222,7 @@ node_t *next(node_t *pos) {
 	return pos->next;
 }
 
-node_t *prev(node_t **head, node_t *pos) {
+node_t *prev(list_t list, node_t *pos) {
 /*******************************************************************************
  *
  * Description:
@@ -219,8 +234,10 @@ node_t *prev(node_t **head, node_t *pos) {
  *      [out] return next: pointer to previous node
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	assert(pos!=NULL);
+
+	node_t **head = list;
 	
 	if(*head == pos) return NULL;
 	
@@ -230,7 +247,7 @@ node_t *prev(node_t **head, node_t *pos) {
 	return *head;
 }
 
-node_t *head(node_t **head) {
+node_t *head(list_t list) {
 /*******************************************************************************
  *
  * Description:
@@ -241,11 +258,12 @@ node_t *head(node_t **head) {
  *      [out] return next: pointer to first node
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
+	node_t **head = list;
 	return *head;
 }
 
-node_t *tail(node_t **head) {
+node_t *tail(list_t list) {
 /*******************************************************************************
  *
  * Description:
@@ -256,7 +274,9 @@ node_t *tail(node_t **head) {
  *      [out] return pos: pointer to last node
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
+
+	node_t **head = list;
 
 	while (*head && (*head)->next != NULL) 
 		head = &(*head)->next; // increment the position
@@ -264,7 +284,7 @@ node_t *tail(node_t **head) {
 	return *head;
 }
 
-int get_value(node_t *pos) {
+struct sockaddr_in get_value(node_t *pos) {
 /*******************************************************************************
  *
  * Description:
@@ -276,10 +296,10 @@ int get_value(node_t *pos) {
  *
  ******************************************************************************/
 	assert(pos!=NULL);
-	return pos->value;
+	return pos->client_address;
 }
 
-void set_value(node_t *pos, int value) {
+void set_value(node_t *pos, struct sockaddr_in client_address) {
 /*******************************************************************************
  *
  * Description:
@@ -291,10 +311,10 @@ void set_value(node_t *pos, int value) {
  *
  ******************************************************************************/
 	assert(pos!=NULL);
-	pos->value = value;
+	pos->client_address = client_address;
 }
 
-void popolate_list(node_t **head, int value[], int n) {
+void load_list(list_t list, struct sockaddr_in client_address[], int n) {
 /*******************************************************************************
  *
  * Description:
@@ -307,16 +327,18 @@ void popolate_list(node_t **head, int value[], int n) {
  *      [in] n: array dimension
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 	assert(n>=0);
 
-	node_t *pos = NULL; // 
+	node_t **head = list;
+	node_t *pos = NULL;
+
 	for(int i=0; i<n; i++) {
-		pos = insert(head, pos, value[i]); // pos is incremented each time
+		pos = insert(head, pos, client_address[i]); // pos is incremented each time
 	}
 }
 
-void print_list(node_t **head) {
+void print_list(list_t list) {
 /*******************************************************************************
  *
  * Description:
@@ -326,12 +348,30 @@ void print_list(node_t **head) {
  *      [in] head: pointer to the sentinel node
  *
  ******************************************************************************/
-	assert(head!=NULL);
+	assert(list!=NULL);
 
-	printf("[ ");
+	node_t **head = list;
+
 	while(*head) {
-		printf("%d, ", (*head)->value);
+		printf("[ %s%s%s:", CYAN, inet_ntoa((*head)->client_address.sin_addr), RESET);
+        printf("%sUDP%u%s ]\n", MAGENTA, ntohs((*head)->client_address.sin_port), RESET);
 		head = &(*head)->next;
 	}
-	printf("\b\b ]\n");
+}
+
+bool is_in_list(list_t list, struct sockaddr_in client_address) {
+	assert(list!=NULL);
+
+	node_t **head = list;
+
+	while(*head) {
+		if (memcmp(&client_address, &(*head)->client_address, sizeof(client_address)) == 0) {
+			return true;
+
+		}
+
+		head = &(*head)->next;
+	}
+	
+	return false;
 }

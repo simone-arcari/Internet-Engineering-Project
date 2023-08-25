@@ -21,6 +21,8 @@
         "inet.h": "c",
         "netdb.h": "c",
         "time.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "singly_linked_list_opt.h": "c",
+        "type_traits": "c"
     }
 }

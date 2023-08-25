@@ -5,8 +5,7 @@
 /******************************** MAIN PROGRAM ********************************/
 int main(void) {
 	/* example code */
-	node_t *list = create_list(); // the list is a pointer to the first node
-	
+	node_t *list;// = create_list(); // the list is a pointer to the first node
 	
 	/* populate my list */
 	int value[9] = {2,5,7,1,6,4,8,9,0};	// array of auxiliaries

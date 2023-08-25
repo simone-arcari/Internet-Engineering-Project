@@ -11,6 +11,9 @@
     in caso errore chiudere la connessione con il client in questione
 
 
+    vedere commenti di cose da fare nelle funzioni
+
+
     se uno attacca il server: invia dati senza aver fatto una connessione, quei dati vanno scartati (serve una lista dei client connessi)
     RICORDA DI DECOMMENTARE LA SENDTO NELL HANDLER_CTRL_C DEL CLIENT
 */
@@ -24,11 +27,13 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "singly_linked_list_opt.h"
 
 
 
@@ -91,6 +96,8 @@
 int server_socket;
 struct sockaddr_in client_address;
 pthread_mutex_t mutex;
+list_t client_list;
+node_t *pos_client = NULL;
 
 
 /* Struttura per passare dati ai threads*/
@@ -98,14 +105,15 @@ typedef struct {
     int server_socket;
     struct sockaddr_in client_address;
     pthread_mutex_t *mutex_pointer;
+    node_t *pos_client;
 } ClientInfo;
 
 
 /* Dichiarazione delle funzioni */
-DIR *check_directory(const char *__name);
+DIR *check_directory(const char *path_name);
 int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer);
-int send_file_list(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer);
-int send_file(int server_socket, struct sockaddr_in client_address, char* filename, pthread_mutex_t *mutex_pointer);
+int send_file_list(int server_socket, struct sockaddr_in client_address);
+int send_file(int server_socket, struct sockaddr_in client_address, char* filename);
 int receive_file(int server_socket, struct sockaddr_in client_address, char* filename, pthread_mutex_t *mutex_pointer);
 int mutex_lock(pthread_mutex_t *mutex);
 int mutex_unlock(pthread_mutex_t *mutex);
@@ -116,14 +124,25 @@ void handle_ctrl_c(int signum, siginfo_t *info, void *context);
 
 
 
-int main(int argc, char *argv[]) {
+int main(int __attribute__((unused)) argc, char *argv[]) {
     socklen_t addr_len;
     ssize_t bytes_received;
     char buffer[MAX_BUFFER_SIZE];
     struct sockaddr_in server_address;
     struct sigaction sa;
-    int res;
-    
+    bool check_list;        // per tenere traccia se un client è nella lista dei client connessi
+    bool check_connect_msg; // per tenere traccia se il messagio ricevuto è una connect
+
+
+    /* Inizializzo la lista dei client */
+    client_list = (list_t)create_list();
+    if (client_list == NULL) {
+        printf("Errore[%d] create_list(): %s\n", errno , strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
+
 
     /* Configurazione di sigaction */
     sa.sa_sigaction = handle_ctrl_c;    // funzione di gestione del segnale
@@ -191,7 +210,7 @@ int main(int argc, char *argv[]) {
         addr_len = sizeof(client_address);
 
 
-        printf("SERVER IN ASCOLOTO\n");
+        printf("SERVER IN ESECUZIONE\n");
 
 
         /* Blocco il mutex prima di leggere dalla socket */
@@ -217,8 +236,16 @@ int main(int argc, char *argv[]) {
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
 
 
-        /* Verifico che sia una richiesta di connessione */ 
-        if (memcmp(buffer, "connect", strlen("connect")) != 0) {
+        /* Verifico che il client sia o no nella lista dei client connessi */
+        check_list = is_in_list(client_list, client_address);
+
+
+        /* Verifico che sia o no una richiesta di connessione */
+        check_connect_msg = ( memcmp(buffer, "connect", strlen("connect")) == 0 );
+
+
+        /* Verifico che il messaggio sia per un thread */
+        if (check_connect_msg == false && check_list == true) {
             mutex_unlock(&mutex);
 
 
@@ -244,18 +271,49 @@ int main(int argc, char *argv[]) {
         printf("%s%s%s\n", BOLDYELLOW, buffer, RESET);
 
 
-        printf("TENTATIVO DI CONNESSIONE\n");
+        /* Gestore delle casistiche */
+        if (check_connect_msg == true && check_list == false) {   /* Caso 1: è una connect e non è già in lista */
+            printf("TENTATIVO DI CONNESSIONE\n");
 
 
-        /* Tentativo di connessione */
-        if (accept_client(server_socket, client_address, &mutex) < 0) {
-            printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex);
-                
+            /* Controllo per evitare segmetion fault */
+            if (is_empty(client_list)) {
+                pos_client = NULL;  
 
-            continue;   // in caso di errore non terminiamo
+            }
+
+
+            /* Inserimento del client nella lista dei client connessi */
+            pos_client = insert(client_list, pos_client, client_address); // pos viene incremtato dalla funzione stessa ogni volta
+            printf("CLIENT INSERITO IN LISTA\n");
+            print_list(client_list);
+
+
+            /* Tentativo di connessione */
+            if (accept_client(server_socket, client_address, &mutex) < 0) {
+                printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
+                printf("CLIENT RIMOSSO DALLA LISTA\n");
+                remove_node(client_list, pos_client);
+                print_list(client_list);
+
+                mutex_unlock(&mutex);
+                    
+
+                continue;   // in caso di errore non terminiamo
+            }
+
+        } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */
+            printf("%sUn client ha tentato una connessione essendo già connesso%s\n\n", RED, RESET);
+
+
+        } else if (check_connect_msg == false && check_list == false) { /* Caso 3: non è una connect e non è già in lista */
+            printf("%sUn client ha inviato un messaggio senza essere connesso%s\n\n", RED, RESET);
+
+
+        } else {
+            printf("%sComando non riconosciuto%s\n\n", RED, RESET);
+
         } 
-
 
 
         /* Sblocco il mutex dopo aver letto dalla socket ed accettato la conessione*/
@@ -273,12 +331,12 @@ int main(int argc, char *argv[]) {
 /* 
     Verifica che la cartella sia presente in caso contrario la creo
 */
-DIR *check_directory(const char *__name) {
+DIR *check_directory(const char *path_name) {
     DIR *directory;
 
 
 RETRY:
-    directory = opendir(PATH_FILE_FOLDER);
+    directory = opendir(path_name);
 
 
     if (directory == NULL) {
@@ -322,7 +380,8 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     time_t current_time;
     time_t elapsed_time;
     time_t max_duration = 5;               // durata massima in secondi del timer
-    int res;
+    node_t *pos = pos_client;              // salvo la posizione prima che venga modificata
+
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
     addr_len = sizeof(client_address);
@@ -339,7 +398,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     }
 
 
-    /* Sblocco per implementare una logica affidabile */
+    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
     mutex_unlock(mutex_pointer); 
 
 
@@ -349,7 +408,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
-        /* Blocco per implementare una logica affidabile */
+        /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
         if (mutex_lock(&mutex) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
@@ -408,6 +467,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
 
     /* Verifico il messaggio ricevuto */
     if (strcmp(buffer, "ack") == 0) { 
+        
         printf("CLIENT CONNESSO\n");
 
     } else {
@@ -431,6 +491,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     client_info->server_socket = server_socket;
     client_info->client_address = client_address;
     client_info->mutex_pointer = mutex_pointer;
+    client_info->pos_client = pos;
 
 
     /* Creazione di un nuovo thread per gestire il client */
@@ -454,7 +515,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     Implementa la logica per inviare la lista dei file disponibili al client
     Utilizza la socket server_socket e l'indirizzo del client client_address
 */
-int send_file_list(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer) {
+int send_file_list(int server_socket, struct sockaddr_in client_address) {
     size_t entry_len;
     size_t total_len;
     size_t residual_buffer = MAX_BUFFER_SIZE;
@@ -543,7 +604,7 @@ int send_file_list(int server_socket, struct sockaddr_in client_address, pthread
     Implementa la logica per inviare un file al client
     Utilizza la socket server_socket, l'indirizzo del client client_address e il nome del file filename
 */
-int send_file(int server_socket, struct sockaddr_in client_address, char* filename, pthread_mutex_t *mutex_pointer) {
+int send_file(int server_socket, struct sockaddr_in client_address, char* filename) {
     DIR *directory;
     FILE *file;
     size_t bytes_read;
@@ -599,7 +660,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
         buffer_size = FRAGMENT_SMALL_SIZE;
 
 
-    } else if (buffer_size < LARGE_SIZE) {
+    } else if (file_size < LARGE_SIZE) {
         buffer_size = FRAGMENT_MEDIUM_SIZE;
 
 
@@ -670,7 +731,6 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
     FILE *file;
     DIR *directory;
     struct sockaddr_in client_address_expected = client_address;
-    int res;
 
 
     /* Verifico l'esistenza della cartella */
@@ -698,7 +758,7 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
     }
 
 
-    /* Sblocco per implementare una logica affidabile */
+    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
     mutex_unlock(mutex_pointer); 
 
 
@@ -757,7 +817,7 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
         fwrite(buffer, 1, bytes_received, file);
 
 
-        /* Sblocco per implementare una logica affidabile */
+        /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
         mutex_unlock(mutex_pointer);
     }
 
@@ -772,7 +832,7 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
 
 
 /*
-    Implementa la chiamta affidabile a pthread_mutex_lock()
+    Implementa la chiamta di sincronizzazione sicura tra i threads a pthread_mutex_lock()
 */
 int mutex_lock(pthread_mutex_t *mutex) {
     int res;
@@ -796,7 +856,7 @@ int mutex_lock(pthread_mutex_t *mutex) {
 
 
 /*
-    Implementa la chiamta affidabile a pthread_mutex_unlock()
+    Implementa la chiamta di sincronizzazione sicura tra i threads a pthread_mutex_unlock()
 */
 int mutex_unlock(pthread_mutex_t *mutex) {
     int res;
@@ -826,13 +886,13 @@ void *handle_client(void *arg) {
     socklen_t addr_len;
     ssize_t bytes_received;
     int server_socket;
-    int res;
     char buffer[MAX_BUFFER_SIZE];
     pthread_t tid;
     pthread_mutex_t *mutex_pointer;
     ClientInfo *client_info;
     struct sockaddr_in client_address;
     struct sockaddr_in client_address_expected;
+    node_t *pos_client;
 
 
     tid = pthread_self();
@@ -840,6 +900,7 @@ void *handle_client(void *arg) {
     client_address_expected = client_info->client_address;
     server_socket = client_info->server_socket;
     mutex_pointer = client_info->mutex_pointer;
+    pos_client = client_info->pos_client;
         
 
     printf("THREAD[%ld] AVVIATO\n", tid);
@@ -905,7 +966,7 @@ void *handle_client(void *arg) {
 
         /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
-            if (send_file_list(server_socket, client_address, mutex_pointer) < 0) {
+            if (send_file_list(server_socket, client_address) < 0) {
                 printf("THREAD[%ld] TERMINATO\n", tid);
                 mutex_unlock(mutex_pointer);
                 free(client_info);
@@ -920,7 +981,7 @@ void *handle_client(void *arg) {
 
         } else if (strncmp(buffer, "get ", 4) == 0) {
             char* filename = buffer + 4;
-            if (send_file(server_socket, client_address, filename, mutex_pointer) < 0) {
+            if (send_file(server_socket, client_address, filename) < 0) {
                 printf("THREAD[%ld] TERMINATO\n", tid);
                 mutex_unlock(mutex_pointer);
                 free(client_info);
@@ -950,10 +1011,13 @@ void *handle_client(void *arg) {
 
         } else if (strcmp(buffer, "close") == 0) {
             printf("THREAD[%ld] TERMINATO\n", tid);
-            mutex_unlock(mutex_pointer);
+            printf("CLIENT RIMOSSO DALLA LISTA\n");
+            remove_node(client_list, pos_client);
+            print_list(client_list);
             free(client_info);
 
 
+            mutex_unlock(mutex_pointer);
             pthread_exit(NULL);
 
         } else {
@@ -972,7 +1036,7 @@ void *handle_client(void *arg) {
 /*
     Funzione di gestione del segnale SIGINT
 */
-void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
+void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((unused)) *info, void __attribute__((unused)) *context) {
     printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
     
     
