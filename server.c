@@ -8,14 +8,10 @@
     compattare il codice in sottofunzioni
 
 
-    in caso errore chiudere la connessione con il client in questione
+    in caso errore chiudere la connessione con il client in questione close verso il client
 
 
-    vedere commenti di cose da fare nelle funzioni
-
-
-    se uno attacca il server: invia dati senza aver fatto una connessione, quei dati vanno scartati (serve una lista dei client connessi)
-    RICORDA DI DECOMMENTARE LA SENDTO NELL HANDLER_CTRL_C DEL CLIENT
+    vedere commenti di cose da fare nelle funzioni handler
 */
 
 #include <time.h>

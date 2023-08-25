@@ -313,7 +313,7 @@ void handle_ctrl_c(int signum, siginfo_t *info, void *context) {
     
 
     /* Invio del comando al server */
-    //sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+    sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
 
     if (close(client_socket) < 0) {
