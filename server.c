@@ -2,11 +2,23 @@
     gcc server.c -o server -lpthread
 
 
+    problema con get 
+
+
+    spostare la accept client dentro il relativo thread
+
+
+    ricordati il problema di sinc tra connected e ack
+
+
+    HO AVUTO UN SEGMETACION FAULT CON LA LISTA CLIENT
+
 
     in caso errore chiudere la connessione con il client in questione close verso il client
 
 
     vedere commenti di cose da fare nelle funzioni handler
+
 */
 
 #include <time.h>
@@ -34,20 +46,14 @@
 /* Variabili globali */
 int server_socket;
 struct sockaddr_in client_address;
+struct sockaddr_in server_address;
+struct sigaction sa;
 pthread_mutex_t mutex;
 list_t client_list;
 node_t *pos_client = NULL;
 
 
-int main(int __attribute__((unused)) argc, char *argv[]) {
-    socklen_t addr_len;
-    ssize_t bytes_received;
-    char buffer[MAX_BUFFER_SIZE];
-    struct sockaddr_in server_address;
-    struct sigaction sa;
-    bool check_list;        // per tenere traccia se un client è nella lista dei client connessi
-    bool check_connect_msg; // per tenere traccia se il messagio ricevuto è una connect
-
+void server_setup() {
 
     /* Inizializzo la lista dei client */
     client_list = (list_t)create_list();
@@ -115,7 +121,20 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
         exit(EXIT_FAILURE);
     }
-    
+}
+
+
+int main(int __attribute__((unused)) argc, char *argv[]) {
+    socklen_t addr_len;
+    ssize_t bytes_received;
+    char buffer[MAX_BUFFER_SIZE];
+    bool check_list;        // per tenere traccia se un client è nella lista dei client connessi
+    bool check_connect_msg; // per tenere traccia se il messagio ricevuto è una connect
+
+
+    /* Incapsula tutto il codice per inizializzare il server e le sue risorse */
+    server_setup();
+
 
     printf("%sServer in ascolto sulla porta %d...%s\n\n", BOLDGREEN, DEFAULT_PORT, RESET);
     
@@ -130,7 +149,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
         /* Blocco il mutex prima di leggere dalla socket */
         if (mutex_lock(&mutex) < 0) {
-            printf("Errore[%d] pthread_mutex(): %s\n", errno, strerror(errno));
+            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
             exit(EXIT_FAILURE);
@@ -198,24 +217,21 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
             }
 
 
-            /* Inserimento del client nella lista dei client connessi */
+            /* Inserimento del client nella lista dei client connessi al server */
             pos_client = insert(client_list, pos_client, client_address); // pos viene incremtato dalla funzione stessa ogni volta
             printf("CLIENT INSERITO IN LISTA\n");
             print_list(client_list);
 
 
-            /* Tentativo di connessione */
-            if (accept_client(server_socket, client_address, &mutex) < 0) {
-                printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
-                printf("CLIENT RIMOSSO DALLA LISTA\n");
-                remove_node(client_list, pos_client);
-                print_list(client_list);
-
+            /* Avvio un thread per servire il client */
+            if (thread_start(server_socket, client_address, &mutex, pos_client) < 0) {
+                printf("Errore[%d] thread_start(): %s\n", errno, strerror(errno));
                 mutex_unlock(&mutex);
-                    
+
 
                 continue;   // in caso di errore non terminiamo
             }
+            
 
         } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */
             printf("%sUn client ha tentato una connessione essendo già connesso%s\n\n", RED, RESET);

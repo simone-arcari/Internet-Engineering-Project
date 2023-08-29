@@ -73,6 +73,7 @@ typedef struct {
 
 /* Dichiarazione delle funzioni */
 DIR *check_directory(const char *path_name);
+int thread_start(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer, node_t *pos_client);
 int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer);
 int send_file_list(int server_socket, struct sockaddr_in client_address);
 int send_file(int server_socket, struct sockaddr_in client_address, char* filename);

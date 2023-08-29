@@ -63,21 +63,60 @@ RETRY:
 
 
 /*
+    Implementa la logica per avviare un thread
+    Utilizza la socket server_socket e l'indirizzo del client client_address
+*/
+int thread_start(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer, node_t *pos_client) {
+    ClientInfo *client_info;
+    pthread_t tid;
+
+
+    /* Creazione di una struttura ClientInfo per passare le informazioni del client al thread */
+    client_info = (ClientInfo *)malloc(sizeof(ClientInfo));
+    if (client_info == NULL) {
+        printf("Errore[%d] malloc(sizeof(ClientInfo)): %s\n", errno, strerror(errno));
+
+
+        return EXIT_ERROR;
+    }
+
+
+    client_info->server_socket = server_socket;
+    client_info->client_address = client_address;
+    client_info->mutex_pointer = mutex_pointer;
+    client_info->pos_client = pos_client;
+
+
+    /* Creazione di un nuovo thread per gestire il client */
+    if (pthread_create(&tid, NULL, handle_client, (void *)client_info) < 0) {
+        printf("Errore[%d] pthread_create(): %s\n", errno, strerror(errno));
+        free(client_info);
+            
+
+        return EXIT_ERROR;
+    }
+        
+
+    pthread_detach(tid);    // detach del thread per permettere la terminazione automatica
+    
+    
+    return EXIT_SUCCESS; 
+}
+
+
+/*
     Implementa la logica per accettare una connessione da un client UDP
     Utilizza la socket server_socket e l'indirizzo del client client_address
 */
 int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer) {
-    socklen_t addr_len;
-    ssize_t bytes_received;
     char buffer[MAX_BUFFER_SIZE];
     struct sockaddr_in client_address_expected;
-    pthread_t tid;
-    ClientInfo *client_info;
+    socklen_t addr_len;
+    ssize_t bytes_received;
     time_t start_time;
     time_t current_time;
     time_t elapsed_time;
     time_t max_duration = 5;               // durata massima in secondi del timer
-    node_t *pos = pos_client;              // salvo la posizione prima che venga modificata
 
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
@@ -93,10 +132,6 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
 
         return EXIT_ERROR;
     }
-
-
-    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
-    mutex_unlock(mutex_pointer); 
 
 
     start_time = time(NULL);     // tempo di inizio del timer
@@ -132,6 +167,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+            mutex_unlock(mutex_pointer);
 
 
             return EXIT_ERROR;
@@ -151,6 +187,7 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+            mutex_unlock(mutex_pointer);
 
 
             return EXIT_ERROR;
@@ -175,33 +212,8 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
     }
 
 
-    /* Creazione di una struttura ClientInfo per passare le informazioni del client al thread */
-    client_info = (ClientInfo *)malloc(sizeof(ClientInfo));
-    if (client_info == NULL) {
-        printf("Errore[%d] malloc(sizeof(ClientInfo)): %s\n", errno, strerror(errno));
-
-
-        return EXIT_ERROR;
-    }
-
-
-    client_info->server_socket = server_socket;
-    client_info->client_address = client_address;
-    client_info->mutex_pointer = mutex_pointer;
-    client_info->pos_client = pos;
-
-
-    /* Creazione di un nuovo thread per gestire il client */
-    if (pthread_create(&tid, NULL, handle_client, (void *)client_info) < 0) {
-        printf("Errore[%d] pthread_create(): %s\n", errno, strerror(errno));
-        free(client_info);
-            
-
-        return EXIT_ERROR;
-    }
-        
-
-    pthread_detach(tid);    // detach del thread per permettere la terminazione automatica
+    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
+    mutex_unlock(mutex_pointer); 
 
 
     return EXIT_SUCCESS;
@@ -386,7 +398,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
 
 
     /* Invio dei pacchetti del file al client */
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+    while ((bytes_read = fread(buffer, 1, buffer_size, file)) > 0) {
         
         if (sendto(server_socket, buffer, bytes_read, 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
             printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
@@ -587,20 +599,32 @@ void *handle_client(void *arg) {
     pthread_t tid;
     pthread_mutex_t *mutex_pointer;
     ClientInfo *client_info;
+    struct sockaddr_in client_address_recived;
     struct sockaddr_in client_address;
-    struct sockaddr_in client_address_expected;
     node_t *pos_client;
 
 
     tid = pthread_self();
     client_info = (ClientInfo *)arg;
-    client_address_expected = client_info->client_address;
+    client_address = client_info->client_address;
     server_socket = client_info->server_socket;
     mutex_pointer = client_info->mutex_pointer;
     pos_client = client_info->pos_client;
+
+
+    printf("THREAD[%s%ld%s] AVVIATO\n",BOLDGREEN, tid, RESET);
+
+
+    /* Tentativo di connessione */
+    if (accept_client(server_socket, client_address, mutex_pointer) < 0) {
+        printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
+        printf("CLIENT RIMOSSO DALLA LISTA\n");
+        remove_node(client_list, pos_client);                  
+        free(client_info);
         
 
-    printf("THREAD[%ld] AVVIATO\n", tid);
+        pthread_exit(NULL);
+    }
 
 
     while (1) {
@@ -619,7 +643,7 @@ void *handle_client(void *arg) {
         
 
         /* Ricezione del comando dal client utilizzando MSG_PEEK per non consumare i dati */
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
+        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
             mutex_unlock(mutex_pointer);
@@ -631,7 +655,7 @@ void *handle_client(void *arg) {
 
 
         /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti */
-        if (memcmp(&client_address, &client_address_expected, addr_len) != 0) {
+        if (memcmp(&client_address_recived, &client_address, addr_len) != 0) {
             mutex_unlock(mutex_pointer); // rilascio il mutex in modo che il messaggio venga consumato da un altro thread
 
 
@@ -640,7 +664,7 @@ void *handle_client(void *arg) {
 
 
         /* Consumazione effettiva dei dati dalla socket */
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
+        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
             mutex_unlock(mutex_pointer);
@@ -664,7 +688,7 @@ void *handle_client(void *arg) {
         /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
             if (send_file_list(server_socket, client_address) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
+                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
                 mutex_unlock(mutex_pointer);
                 free(client_info);
 
@@ -679,7 +703,7 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "get ", 4) == 0) {
             char* filename = buffer + 4;
             if (send_file(server_socket, client_address, filename) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
+                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
                 mutex_unlock(mutex_pointer);
                 free(client_info);
 
@@ -694,7 +718,7 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "put ", 4) == 0) {
             char* filename = buffer + 4;
             if (receive_file(server_socket, client_address, filename, mutex_pointer) < 0) {
-                printf("THREAD[%ld] TERMINATO\n", tid);
+                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
                 mutex_unlock(mutex_pointer);
                 free(client_info);
 
@@ -707,7 +731,7 @@ void *handle_client(void *arg) {
 
 
         } else if (strcmp(buffer, "close") == 0) {
-            printf("THREAD[%ld] TERMINATO\n", tid);
+            printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
             printf("CLIENT RIMOSSO DALLA LISTA\n");
             remove_node(client_list, pos_client);
             print_list(client_list);
