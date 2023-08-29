@@ -18,6 +18,7 @@
 
 
 /* Dichiarazione esterna della variabile globale */
+extern unsigned long n_clt;  // nummero di client connessi
 extern int server_socket;
 extern struct sockaddr_in client_address;
 extern pthread_mutex_t mutex;
@@ -201,11 +202,12 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
 
     /* Verifico il messaggio ricevuto */
     if (strcmp(buffer, "ack") == 0) { 
-        
         printf("CLIENT CONNESSO\n");
+        
 
     } else {
         printf("CLIENT NON CONNESSO\n");
+        mutex_unlock(mutex_pointer); 
 
 
         return EXIT_ERROR;
@@ -617,9 +619,11 @@ void *handle_client(void *arg) {
 
     /* Tentativo di connessione */
     if (accept_client(server_socket, client_address, mutex_pointer) < 0) {
+        n_clt--;
         printf("Errore[%d] accept_client() [connessione rifiutata]: %s\n", errno, strerror(errno));
-        printf("CLIENT RIMOSSO DALLA LISTA\n");
-        remove_node(client_list, pos_client);                  
+        printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+        remove_node(client_list, pos_client);
+        n_clt <= 30 ? print_list(client_list):0;                  
         free(client_info);
         
 
@@ -731,10 +735,11 @@ void *handle_client(void *arg) {
 
 
         } else if (strcmp(buffer, "close") == 0) {
-            printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
-            printf("CLIENT RIMOSSO DALLA LISTA\n");
+            n_clt--;
+            printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
+            printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
             remove_node(client_list, pos_client);
-            print_list(client_list);
+            n_clt <= 30 ? print_list(client_list):0;
             free(client_info);
 
 

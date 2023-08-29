@@ -34,6 +34,7 @@
 
 
 /* Variabili globali */
+unsigned long n_clt = 0;  // nummero di client connessi
 int server_socket;
 struct sockaddr_in client_address;
 struct sockaddr_in server_address;
@@ -134,9 +135,6 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
         addr_len = sizeof(client_address);
 
 
-        printf("SERVER IN ESECUZIONE\n");
-
-
         /* Blocco il mutex prima di leggere dalla socket */
         if (mutex_lock(&mutex) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
@@ -208,10 +206,10 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
 
             /* Inserimento del client nella lista dei client connessi al server */
+            n_clt++;
             pos_client = insert(client_list, pos_client, client_address); // pos viene incremtato dalla funzione stessa ogni volta
-            printf("CLIENT INSERITO IN LISTA\n");
-            print_list(client_list);
-
+            printf("CLIENT INSERITO IN LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+            n_clt <= 30 ? print_list(client_list):0;
 
             /* Avvio un thread per servire il client */
             if (thread_start(server_socket, client_address, &mutex, pos_client) < 0) {

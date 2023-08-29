@@ -351,6 +351,7 @@ void print_list(list_t list) {
 	assert(list!=NULL);
 
 	node_t **head = list;
+	printf("\n%s%sLista client connessi:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
 
 	while(*head) {
 		printf("[ %s%s%s:", CYAN, inet_ntoa((*head)->client_address.sin_addr), RESET);

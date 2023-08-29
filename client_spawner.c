@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
             // Questo è il processo figlio
 
             // Parametri da passare al client
-            char *args[] = {"gnome-terminal", "--", "./client", "list", NULL};
+            char *args[] = {"gnome-terminal", "--", "./client", "get", "test.pdf", NULL};
 
             // Esegue il comando gnome-terminal con i parametri specificati
             execvp("gnome-terminal", args);

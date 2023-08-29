@@ -20,7 +20,7 @@
 #define FRAGMENT_MICRO_SIZE     512     // 512 byte dimensione dei frammenti del dile passati al livello di trasporto
 #define FRAGMENT_SMALL_SIZE     1024    // 1kB dimensione dei frammenti del dile passati al livello di trasporto
 #define FRAGMENT_MEDIUM_SIZE    8192    // 8kB dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_LARGE_SIZE     65536   // 64kB dimensione dei frammenti del dile passati al livello di trasporto
+#define FRAGMENT_LARGE_SIZE     16384   // 12kB dimensione dei frammenti del dile passati al livello di trasporto
 
 
 #define EXIT_ERROR -1
