@@ -1,17 +1,7 @@
 /*
     gcc server.c -o server -lpthread
 
-
-    problema con get 
-
-
-    spostare la accept client dentro il relativo thread
-
-
-    ricordati il problema di sinc tra connected e ack
-
-
-    HO AVUTO UN SEGMETACION FAULT CON LA LISTA CLIENT
+    implementare la close_connection()
 
 
     in caso errore chiudere la connessione con il client in questione close verso il client
@@ -231,7 +221,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
                 continue;   // in caso di errore non terminiamo
             }
-            
+
 
         } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */
             printf("%sUn client ha tentato una connessione essendo già connesso%s\n\n", RED, RESET);
