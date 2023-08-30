@@ -1,10 +1,13 @@
 /*
     gcc server.c -o server -lpthread
 
-    implementare la close_connection()
+    implementare la close_connection() da rivedere bene
 
 
     in caso errore chiudere la connessione con il client in questione close verso il client
+
+
+    ritorno errori al client 
 
 
     vedere commenti di cose da fare nelle funzioni handler

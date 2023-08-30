@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -15,9 +16,9 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-#define IP_SERVER "192.168.1.22"    // PC FISSO
+//#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-//#define IP_SERVER "192.168.1.78"     // PER PROVE FUORI CASA
+#define IP_SERVER "10.220.253.110"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
 
@@ -305,6 +306,41 @@ int upload_file(int client_socket, struct sockaddr_in server_address, char* file
 }
 
 
+void *receive_thread(void __attribute__((unused)) *arg) {
+    char buffer[MAX_BUFFER_SIZE];
+    int bytes_received;
+
+
+    while (1) {
+        memset(buffer, 0, MAX_BUFFER_SIZE);
+
+        
+        /* Ricezione messaggi enza consumare i dati */
+        bytes_received = recvfrom(client_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, NULL, NULL);
+        if (bytes_received < 0) {
+            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
+
+
+            exit(EXIT_FAILURE);
+        }
+
+
+        buffer[bytes_received] = '\0';
+
+
+        /* Controllo se il messaggio è un comando di terminazione */
+        if (strcmp(buffer, "close") == 0) {
+            printf("\n\b\b%sSegnale chiusura connessione dal server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+            
+                    
+            exit(EXIT_SUCCESS);
+        }
+    }
+
+    return NULL;
+}
+
+
 /*
     Funzione di gestione del segnale SIGINT
 */
@@ -312,7 +348,7 @@ void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((
     char buffer[MAX_BUFFER_SIZE] = "close";
 
 
-    printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+    printf("\n\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
     
 
     /* Invio del comando al server */
@@ -346,6 +382,7 @@ int main(int argc, char *argv[]) {
     char buffer[MAX_BUFFER_SIZE];
     struct sigaction sa1;
     struct sigaction sa2;
+    pthread_t tid;
     
 
     /* Configurazione di sigaction per Ctrl+c */
@@ -415,6 +452,15 @@ int main(int argc, char *argv[]) {
     }
 
 
+    /* Creo un thread per la ricezione asincrona */
+    if (pthread_create(&tid, NULL, receive_thread, NULL) != 0) {
+        printf("Errore pthread_create(): %s\n", strerror(errno)); 
+
+
+        exit(EXIT_FAILURE);
+    }
+
+
     /* Per debug */
     if (argc == 2) {
         sprintf(buffer, "%s", argv[1]);
@@ -445,7 +491,7 @@ JUMP:
             if (receive_file_list(client_socket) < 0) {
 
 
-                return EXIT_FAILURE;
+                exit(EXIT_FAILURE);
             }
 
 
@@ -455,7 +501,7 @@ JUMP:
             if (download_file(client_socket, filename) < 0) {
 
 
-                return EXIT_FAILURE;
+                exit(EXIT_FAILURE);
             }
 
 
@@ -465,7 +511,7 @@ JUMP:
             if (upload_file(client_socket, server_address, filename) < 0) {
 
 
-                return EXIT_FAILURE;
+                exit(EXIT_FAILURE);
             }
 
 
@@ -475,14 +521,15 @@ JUMP:
                 printf("Errore close(): %s\n", strerror(errno)); 
 
 
-                return EXIT_FAILURE;
+                exit(EXIT_FAILURE);
             }
+            printf("\n\b\b%sSegnale chiusura connessione dal server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
 
-            return EXIT_SUCCESS;
+            exit(EXIT_SUCCESS);
         }
     }
 
 
 
-    return EXIT_SUCCESS;
+    exit(EXIT_SUCCESS);
 }

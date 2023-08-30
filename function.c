@@ -223,6 +223,40 @@ int accept_client(int server_socket, struct sockaddr_in client_address, pthread_
 
 
 /*
+    Implementa la logica per chiudere la connessione con il client
+    Utilizza la socket server_socket e l'indirizzo del client client_address
+*/
+int close_connection(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer) {
+    char buffer[MAX_BUFFER_SIZE];
+    struct sockaddr_in client_address_expected;
+    socklen_t addr_len;
+    ssize_t bytes_received;
+    time_t start_time;
+    time_t current_time;
+    time_t elapsed_time;
+    time_t max_duration = 5;               // durata massima in secondi del timer
+
+
+    memset(buffer, 0, MAX_BUFFER_SIZE);
+    addr_len = sizeof(client_address);
+    client_address_expected = client_address;
+
+
+    /* Invio messaggio di fine connessione */
+    snprintf(buffer, MAX_BUFFER_SIZE, "close");
+    if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
+        printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
+
+
+        return EXIT_ERROR;
+    }
+
+
+    return EXIT_SUCCESS;
+}
+
+
+/*
     Implementa la logica per inviare la lista dei file disponibili al client
     Utilizza la socket server_socket e l'indirizzo del client client_address
 */
@@ -763,12 +797,25 @@ void *handle_client(void *arg) {
     Funzione di gestione del segnale SIGINT
 */
 void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((unused)) *info, void __attribute__((unused)) *context) {
+    struct sockaddr_in client_address;
+
+
     printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
     
+
+    /* Chiudo la connessione con tutti i client */
+    while (is_empty(client_list) == false) {
+        client_address = get_value(pos_client);
+        close_connection(server_socket, client_address, &mutex);
+        pos_client = remove_node(client_list, pos_client);
+        print_list(client_list);
+
+        
+    }
     
-    // invia segnale a tutti i client (serve lista client)
 
     pthread_mutex_destroy(&mutex); // Distrugge il mutex
+
 
     if (close(server_socket) < 0) {
         printf("Errore close(): %s\n", strerror(errno)); 
@@ -776,6 +823,7 @@ void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((
 
         exit(EXIT_FAILURE);
     }
+
 
     exit(EXIT_SUCCESS);
 }

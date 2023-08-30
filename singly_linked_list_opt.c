@@ -175,7 +175,7 @@ node_t *remove_node(list_t list, node_t *pos) {
 /*******************************************************************************
  *
  * Description:
- *      removes the node pointed to by pos deallocating its memory area in the 
+ *      removes the node pointed to by pos, deallocating its memory area in the 
  *      heap and returns the position to the previous node.
  * 
  * Parameters:
