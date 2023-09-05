@@ -1,16 +1,15 @@
 /*
     gcc server.c -o server -lpthread
 
-    implementare la close_connection() da rivedere bene
 
-
-    in caso errore chiudere la connessione con il client in questione close verso il client
 
 
     ritorno errori al client 
 
 
-    vedere commenti di cose da fare nelle funzioni handler
+    scrivere quali funzioni voglio o no la lock prima di essere chiamate
+
+    lock sulle sendto
 
 */
 
@@ -155,7 +154,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
 
             continue;   // in caso di errore non terminiamo ma torniamo ad scoltare
-        } 
+        }
         
 
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
@@ -212,11 +211,15 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
             n_clt++;
             pos_client = insert(client_list, pos_client, client_address); // pos viene incremtato dalla funzione stessa ogni volta
             printf("CLIENT INSERITO IN LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
-            n_clt <= 30 ? print_list(client_list):0;
+            n_clt <= 30 ? print_list(client_list):0;        // stampo la lista solo se non è troppo lunga
 
             /* Avvio un thread per servire il client */
             if (thread_start(server_socket, client_address, &mutex, pos_client) < 0) {
                 printf("Errore[%d] thread_start(): %s\n", errno, strerror(errno));
+                printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+                remove_node(client_list, pos_client);
+                n_clt--;
+                n_clt <= 30 ? print_list(client_list):0;
                 mutex_unlock(&mutex);
 
 

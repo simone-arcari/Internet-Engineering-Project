@@ -108,6 +108,7 @@ int thread_start(int server_socket, struct sockaddr_in client_address, pthread_m
 /*
     Implementa la logica per accettare una connessione da un client UDP
     Utilizza la socket server_socket e l'indirizzo del client client_address
+    NOTA: questa funzione va chiamata senza aver effettuato una lock prima (la fa la funzione stessa al suo interno)
 */
 int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer) {
     char buffer[MAX_BUFFER_SIZE];
@@ -230,16 +231,14 @@ int close_connection(int server_socket, struct sockaddr_in client_address, pthre
     char buffer[MAX_BUFFER_SIZE];
     struct sockaddr_in client_address_expected;
     socklen_t addr_len;
-    ssize_t bytes_received;
-    time_t start_time;
-    time_t current_time;
-    time_t elapsed_time;
-    time_t max_duration = 5;               // durata massima in secondi del timer
 
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
     addr_len = sizeof(client_address);
     client_address_expected = client_address;
+
+
+    wait();
 
 
     /* Invio messaggio di fine connessione */
@@ -357,6 +356,8 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     long buffer_size;
     char *buffer;
     char full_path[MAX_BUFFER_SIZE]; 
+
+    return -1;
 
 
     /* Verifico l'esistenza della cartella */
@@ -659,6 +660,9 @@ void *handle_client(void *arg) {
         remove_node(client_list, pos_client);
         n_clt <= 30 ? print_list(client_list):0;                  
         free(client_info);
+
+
+        close_connection(server_socket, client_address, mutex_pointer);
         
 
         pthread_exit(NULL);
@@ -672,9 +676,18 @@ void *handle_client(void *arg) {
 
         /* Blocco il mutex prima di leggere dalla socket */
         if (mutex_lock(mutex_pointer) < 0) {
+            n_clt--;
+            printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+            printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+            remove_node(client_list, pos_client);
+            n_clt <= 30 ? print_list(client_list):0;
             free(client_info);
-        
+
+
+            // chiudere la connessione + messaggio errore
+            // inviare comando di fine connessione
+            close_connection(server_socket, client_address, mutex_pointer);
 
             pthread_exit(NULL);
         }
@@ -683,11 +696,20 @@ void *handle_client(void *arg) {
         /* Ricezione del comando dal client utilizzando MSG_PEEK per non consumare i dati */
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
+            n_clt--;
+            printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(mutex_pointer);
+            printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+            remove_node(client_list, pos_client);
+            n_clt <= 30 ? print_list(client_list):0;
             free(client_info);
 
 
+            // chiudere la connessione + messaggio errore
+            // inviare comando di fine connessione
+            close_connection(server_socket, client_address, mutex_pointer);
+
+            mutex_unlock(mutex_pointer);
             pthread_exit(NULL);
         }
 
@@ -704,11 +726,20 @@ void *handle_client(void *arg) {
         /* Consumazione effettiva dei dati dalla socket */
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
+            n_clt--;
+            printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(mutex_pointer);
+            printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+            remove_node(client_list, pos_client);
+            n_clt <= 30 ? print_list(client_list):0;
             free(client_info);
 
 
+            // chiudere la connessione + messaggio errore
+            // inviare comando di fine connessione
+            close_connection(server_socket, client_address, mutex_pointer);
+
+            mutex_unlock(mutex_pointer);
             pthread_exit(NULL);
         }
 
@@ -726,14 +757,20 @@ void *handle_client(void *arg) {
         /* Gestore dei comandi */
         if (strcmp(buffer, "list") == 0) {
             if (send_file_list(server_socket, client_address) < 0) {
-                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
-                mutex_unlock(mutex_pointer);
+                n_clt--;
+                printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
+                printf("Errore[%d] send_file_list(): %s\n", errno, strerror(errno));
+                printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+                remove_node(client_list, pos_client);
+                n_clt <= 30 ? print_list(client_list):0;
                 free(client_info);
+
 
                 // chiudere la connessione + messaggio errore
                 // inviare comando di fine connessione
+                close_connection(server_socket, client_address, mutex_pointer);
 
-
+                mutex_unlock(mutex_pointer);
                 pthread_exit(NULL);
             }
 
@@ -741,14 +778,21 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "get ", 4) == 0) {
             char* filename = buffer + 4;
             if (send_file(server_socket, client_address, filename) < 0) {
-                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
-                mutex_unlock(mutex_pointer);
+                n_clt--;
+                printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
+                printf("Errore[%d] send_file(): %s\n", errno, strerror(errno));
+                printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+                remove_node(client_list, pos_client);
+                n_clt <= 30 ? print_list(client_list):0;
                 free(client_info);
+
 
                 // chiudere la connessione + messaggio errore
                 // inviare comando di fine connessione
+                close_connection(server_socket, client_address, mutex_pointer);
 
 
+                mutex_unlock(mutex_pointer);
                 pthread_exit(NULL);
             }
 
@@ -756,14 +800,20 @@ void *handle_client(void *arg) {
         } else if (strncmp(buffer, "put ", 4) == 0) {
             char* filename = buffer + 4;
             if (receive_file(server_socket, client_address, filename, mutex_pointer) < 0) {
-                printf("THREAD[%s%ld%s] TERMINATO\n", BG_GREEN, tid, RESET);
-                mutex_unlock(mutex_pointer);
+                n_clt--;
+                printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
+                printf("Errore[%d] receive_file(): %s\n", errno, strerror(errno));
+                printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
+                remove_node(client_list, pos_client);
+                n_clt <= 30 ? print_list(client_list):0;
                 free(client_info);
+
 
                 // chiudere la connessione + messaggio errore
                 // inviare comando di fine connessione
+                close_connection(server_socket, client_address, mutex_pointer);
 
-
+                mutex_unlock(mutex_pointer);
                 pthread_exit(NULL);
             }
 

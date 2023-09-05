@@ -18,7 +18,7 @@
 #define DEFAULT_PORT 8888
 //#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-#define IP_SERVER "10.220.253.110"     // PER PROVE FUORI CASA
+#define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
 
@@ -61,7 +61,55 @@
 
 int client_socket;
 struct sockaddr_in server_address;
+pthread_mutex_t mutex;
 
+
+/*
+    Implementa la chiamta di sincronizzazione sicura tra i threads a pthread_mutex_lock()
+*/
+int mutex_lock(pthread_mutex_t *mutex) {
+    int res;
+
+
+    do {
+        errno = 0; // azzeramento di errno
+        res = pthread_mutex_lock(mutex);
+            
+        if (res != 0 && errno != EINTR) {
+            printf("Errore[%d] pthread_mutex_lock(): %s\n", errno, strerror(errno));
+        
+
+            return EXIT_ERROR;
+        }
+    } while (errno == EINTR);
+
+
+    return EXIT_SUCCESS;
+}
+
+
+/*
+    Implementa la chiamta di sincronizzazione sicura tra i threads a pthread_mutex_unlock()
+*/
+int mutex_unlock(pthread_mutex_t *mutex) {
+    int res;
+
+
+    do {
+        errno = 0; // azzeramento di errno
+        res = pthread_mutex_unlock(mutex);
+            
+        if (res != 0 && errno != EINTR) {
+            printf("Errore[%d] pthread_mutex_unlock(): %s\n", errno, strerror(errno));
+        
+
+            return EXIT_ERROR;
+        }
+    } while (errno == EINTR);
+
+
+    return EXIT_SUCCESS;
+}
 
 
 /* 
@@ -166,6 +214,15 @@ int receive_file_list(int client_socket) {
     char buffer[MAX_BUFFER_SIZE];
 
 
+    /* Blocco il mutex prima di leggere dalla socket */
+    if (mutex_lock(&mutex) < 0) {
+        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
+
+
     bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
     if (bytes_received < 0) {
         printf("Errore recvfrom(): %s\n", strerror(errno));
@@ -178,6 +235,7 @@ int receive_file_list(int client_socket) {
     buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
     printf("\n%s%sLista file ricevuta dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
     printf("%s%s%s\n", GREEN, buffer, RESET);
+    mutex_unlock(&mutex);
 
 
     return EXIT_SUCCESS;
@@ -193,6 +251,15 @@ int download_file(int client_socket, char* filename) {
     FILE *file;
     int bytes_received;
     char buffer[MAX_BUFFER_SIZE];
+
+
+    /* Blocco il mutex prima di leggere dalla socket */
+    if (mutex_lock(&mutex) < 0) {
+        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        
+
+        return EXIT_FAILURE;
+    }
 
 
     /* Verifico l'esistenza della cartella */
@@ -244,6 +311,7 @@ int download_file(int client_socket, char* filename) {
 
     fclose(file);   // Chiudo il file
     closedir(directory);
+    mutex_unlock(&mutex);
     printf("FILE RICEVUTO CON SUCCESSO\n\n");
 
 
@@ -314,8 +382,16 @@ void *receive_thread(void __attribute__((unused)) *arg) {
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
+        /* Blocco il mutex prima di leggere dalla socket */
+        if (mutex_lock(&mutex) < 0) {
+            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
-        /* Ricezione messaggi enza consumare i dati */
+
+            exit(EXIT_FAILURE);
+        }
+
+        
+        /* Ricezione messaggi senza consumare i dati */
         bytes_received = recvfrom(client_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, NULL, NULL);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -330,12 +406,18 @@ void *receive_thread(void __attribute__((unused)) *arg) {
 
         /* Controllo se il messaggio è un comando di terminazione */
         if (strcmp(buffer, "close") == 0) {
-            printf("\n\b\b%sSegnale chiusura connessione dal server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+            printf("\n\b\b%sSegnale chiusura connessione da parte del server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
             
                     
             exit(EXIT_SUCCESS);
         }
+
+
+        mutex_unlock(&mutex);
+
+
     }
+    
 
     return NULL;
 }
@@ -413,6 +495,15 @@ int main(int argc, char *argv[]) {
     }
 
 
+    /* Inizializzo il mutex */
+    if (pthread_mutex_init(&mutex, NULL) != 0) {
+        printf("Errore[%d] pthread_mutex_init(): %s\n", errno , strerror(errno));
+
+       
+        return EXIT_FAILURE;
+    }
+
+
     /* Verifico l'esistenza della cartella preposta per contenere i file */
     if (check_directory(PATH_FILE_FOLDER) == NULL) {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
@@ -452,7 +543,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    /* Creo un thread per la ricezione asincrona */
+    /* Creo un thread per la ricezione asincrona di un eventuale messaggio di fine connessione */
     if (pthread_create(&tid, NULL, receive_thread, NULL) != 0) {
         printf("Errore pthread_create(): %s\n", strerror(errno)); 
 
