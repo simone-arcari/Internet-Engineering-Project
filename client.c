@@ -16,9 +16,9 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define DEFAULT_PORT 8888
-//#define IP_SERVER "192.168.1.22"    // PC FISSO
+#define IP_SERVER "192.168.1.22"    // PC FISSO
 //#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-#define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
+//#define IP_SERVER "10.13.46.152"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
 
@@ -162,7 +162,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     /* Imposto scadenza del timer */
-    alarm(5);
+    alarm(15);
 
 
     /* Risposta del server */

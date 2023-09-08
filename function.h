@@ -66,19 +66,18 @@
 typedef struct {
     int server_socket;
     struct sockaddr_in client_address;
-    pthread_mutex_t *mutex_pointer;
     node_t *pos_client;
 } ClientInfo;
 
 
 /* Dichiarazione delle funzioni */
 DIR *check_directory(const char *path_name);
-int thread_start(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer, node_t *pos_client);
-int accept_client(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer);
-int close_connection(int server_socket, struct sockaddr_in client_address, pthread_mutex_t *mutex_pointer);
+int thread_start(int server_socket, struct sockaddr_in client_address, node_t *pos_client);
+int accept_client(int server_socket, struct sockaddr_in client_address);
+int close_connection(int server_socket, struct sockaddr_in client_address);
 int send_file_list(int server_socket, struct sockaddr_in client_address);
 int send_file(int server_socket, struct sockaddr_in client_address, char* filename);
-int receive_file(int server_socket, struct sockaddr_in client_address, char* filename, pthread_mutex_t *mutex_pointer);
+int receive_file(int server_socket, struct sockaddr_in client_address, char* filename);
 int mutex_lock(pthread_mutex_t *mutex);
 int mutex_unlock(pthread_mutex_t *mutex);
 void *handle_client(void *arg);

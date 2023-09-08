@@ -2,14 +2,16 @@
     gcc server.c -o server -lpthread
 
 
-
-
     ritorno errori al client 
 
 
     scrivere quali funzioni voglio o no la lock prima di essere chiamate
 
-    lock sulle sendto
+
+    lock sulle sendto anche nei sendto di close_connection
+
+
+    wait in close_connection(forse non serve se uno fa bene i mutex)
 
 */
 
@@ -41,7 +43,8 @@ int server_socket;
 struct sockaddr_in client_address;
 struct sockaddr_in server_address;
 struct sigaction sa;
-pthread_mutex_t mutex;
+pthread_mutex_t mutex_rcv;      // mutex per la gestione della ricezione
+pthread_mutex_t mutex_snd;      // mutex per la gestione degli invii
 list_t client_list;
 node_t *pos_client = NULL;
 
@@ -73,7 +76,16 @@ void server_setup() {
     
 
     /* Inizializzo il mutex */
-    if (pthread_mutex_init(&mutex, NULL) != 0) {
+    if (pthread_mutex_init(&mutex_rcv, NULL) != 0) {
+        printf("Errore[%d] pthread_mutex_init(): %s\n", errno , strerror(errno));
+
+       
+        exit(EXIT_FAILURE);
+    }
+
+
+    /* Inizializzo il mutex */
+    if (pthread_mutex_init(&mutex_snd, NULL) != 0) {
         printf("Errore[%d] pthread_mutex_init(): %s\n", errno , strerror(errno));
 
        
@@ -138,7 +150,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
 
         /* Blocco il mutex prima di leggere dalla socket */
-        if (mutex_lock(&mutex) < 0) {
+        if (mutex_lock(&mutex_rcv) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
@@ -150,7 +162,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex);
+            mutex_unlock(&mutex_rcv);
 
 
             continue;   // in caso di errore non terminiamo ma torniamo ad scoltare
@@ -170,7 +182,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
         /* Verifico che il messaggio sia per un thread */
         if (check_connect_msg == false && check_list == true) {
-            mutex_unlock(&mutex);
+            mutex_unlock(&mutex_rcv);
 
 
             continue;   // se non è una richiesta ignoro il messaggio
@@ -181,7 +193,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex);
+            mutex_unlock(&mutex_rcv);
 
 
             continue;   // in caso di errore non terminiamo
@@ -214,13 +226,13 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
             n_clt <= 30 ? print_list(client_list):0;        // stampo la lista solo se non è troppo lunga
 
             /* Avvio un thread per servire il client */
-            if (thread_start(server_socket, client_address, &mutex, pos_client) < 0) {
+            if (thread_start(server_socket, client_address, pos_client) < 0) {
                 printf("Errore[%d] thread_start(): %s\n", errno, strerror(errno));
                 printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
                 remove_node(client_list, pos_client);
                 n_clt--;
                 n_clt <= 30 ? print_list(client_list):0;
-                mutex_unlock(&mutex);
+                mutex_unlock(&mutex_rcv);
 
 
                 continue;   // in caso di errore non terminiamo
@@ -242,7 +254,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
 
         /* Sblocco il mutex dopo aver letto dalla socket ed accettato la conessione*/
-        mutex_unlock(&mutex);
+        mutex_unlock(&mutex_rcv);
     }
 
     
