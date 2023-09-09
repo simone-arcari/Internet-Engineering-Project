@@ -1,3 +1,14 @@
+/**
+ * @file double_linked_list_opt.c
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari
+ * @date 2023-09-09 (nel formato YYYY-MM-DD)
+ */
+
+
 /*
 NOTA:   in this implementation of lists we use the assert.h library for
 		carry out all the checks on the parameters passed to the functions.
@@ -13,7 +24,7 @@ NOTA:   in this implementation of lists we use the assert.h library for
 #include <stdbool.h>
 #include <netinet/in.h>	// includo la libreria per sockaddr_in
 #include <arpa/inet.h>	// includo la libreria per inet_ntoa() e ntohs()
-#include "singly_linked_list_opt.h"
+#include "double_linked_list_opt.h"
 
 
 bool is_empty(list_t list) {

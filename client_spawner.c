@@ -1,3 +1,14 @@
+/**
+ * @file client_spawner.c
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari, Valeria Villano
+ * @date 2023-09-09 (nel formato YYYY-MM-DD)
+ */
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

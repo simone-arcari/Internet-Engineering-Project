@@ -1,3 +1,14 @@
+/**
+ * @file double_linked_list_opt.h
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari
+ * @date 2023-09-09 (nel formato YYYY-MM-DD)
+ */
+
+
 #ifndef SINGLY_LINKED_LIST_OPT_H_
 #define SINGLY_LINKED_LIST_OPT_H_
 

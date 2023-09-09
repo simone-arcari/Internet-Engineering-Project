@@ -1,3 +1,14 @@
+/**
+ * @file client.c
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari, Valeria Villano
+ * @date 2023-09-09 (nel formato YYYY-MM-DD)
+ */
+
+
 #include <stdio.h>
 #include <errno.h>
 #include <netdb.h>
@@ -233,8 +244,8 @@ int receive_file_list(int client_socket) {
 
 
     buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
-    printf("\n%s%sLista file ricevuta dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
-    printf("%s%s%s\n", GREEN, buffer, RESET);
+    printf("\n%s%sLista file inviata dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
+    printf("%s%s%s\n", YELLOW, buffer, RESET);
     mutex_unlock(&mutex);
 
 
@@ -614,7 +625,7 @@ JUMP:
 
                 exit(EXIT_FAILURE);
             }
-            printf("\n\b\b%sSegnale chiusura connessione dal server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+            printf("\n\b\b%sSegnale chiusura connessione inviato al server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
 
             exit(EXIT_SUCCESS);
         }

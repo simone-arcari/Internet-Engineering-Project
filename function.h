@@ -1,3 +1,14 @@
+/**
+ * @file function.h
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari, Valeria Villano
+ * @date 2023-09-09 (nel formato YYYY-MM-DD)
+ */
+
+
 #ifndef FUNCTION_H_
 #define FUNCTION_H_
 
@@ -5,27 +16,28 @@
 #include <dirent.h>
 #include <arpa/inet.h>
 #include <signal.h>
-#include "singly_linked_list_opt.h"
+#include "double_linked_list_opt.h"
 
 
 #define MAX_BUFFER_SIZE 1024
-#define PATH_FILE_FOLDER "file_folder_server"   // path per la cartella preposta per contenere i file
+#define PATH_FILE_FOLDER "file_folder_server"   // path per la cartella preposta per contenere i file gestiti dal server
 
 
-#define SMALL_SIZE  1024        // 1kB valore oltre il quale si considera un file "small" prima di questo valore lo si considera "micro"
+#define SMALL_SIZE  1024        // 1kB  valore oltre il quale si considera un file "small" prima di questo valore lo si considera "micro"
 #define MEDIUM_SIZE 10240       // 10kB valore oltre il quale si considera un file "medium"
-#define LARGE_SIZE  1048576     // 1MB valore oltre il quale si considera un file "large"
+#define LARGE_SIZE  1048576     // 1MB  valore oltre il quale si considera un file "large"
 
 
-#define FRAGMENT_MICRO_SIZE     512     // 512 byte dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_SMALL_SIZE     1024    // 1kB dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_MEDIUM_SIZE    8192    // 8kB dimensione dei frammenti del dile passati al livello di trasporto
-#define FRAGMENT_LARGE_SIZE     16384   // 12kB dimensione dei frammenti del dile passati al livello di trasporto
+#define FRAGMENT_MICRO_SIZE     512     // 512byte dimensione dei frammenti del file passati al livello di trasporto
+#define FRAGMENT_SMALL_SIZE     1024    // 1kB     dimensione dei frammenti del file passati al livello di trasporto
+#define FRAGMENT_MEDIUM_SIZE    8192    // 8kB     dimensione dei frammenti del file passati al livello di trasporto
+#define FRAGMENT_LARGE_SIZE     16384   // 12kB    dimensione dei frammenti del file passati al livello di trasporto
 
 
-#define EXIT_ERROR -1
+#define EXIT_ERROR -1           // codice di errore
 
 
+/* Stringhe per gestire i caratteri colorati nel terminale */
 #define RESET     "\033[0m"
 #define BOLD      "\033[1m"
 #define DIM       "\033[2m"
@@ -62,7 +74,7 @@
 #define BG_WHITE   "\033[47m"
 
 
-/* Struttura per passare dati ai threads*/
+/* Struttura per passare dati ai threads */
 typedef struct {
     int server_socket;
     struct sockaddr_in client_address;
@@ -81,6 +93,7 @@ int receive_file(int server_socket, struct sockaddr_in client_address, char* fil
 int mutex_lock(pthread_mutex_t *mutex);
 int mutex_unlock(pthread_mutex_t *mutex);
 void *handle_client(void *arg);
+void thread_kill(pthread_t tid, node_t *pos_client);
 void handle_ctrl_c(int signum, siginfo_t *info, void *context);
 
 #endif  /* FUNCTION_H_ */

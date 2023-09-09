@@ -1,6 +1,6 @@
 CFLAGS_server = -Wall -Wextra -lpthread
 CFLAGS_client = -Wall -Wextra
-SRCS_server = server.c singly_linked_list_opt.c function.c
+SRCS_server = server.c double_linked_list_opt.c function.c
 SRCS_client = client.c 
 OBJS_server = $(SRCS_server:.c=.o)
 OBJS_client = $(SRCS_client:.c=.o)
@@ -18,4 +18,4 @@ client: $(OBJS_client)
 
 .PHONY: clean
 clean:
-	-$(RM) server clientProva $(OBJS_server) $(OBJS_client)
+	-$(RM) server client $(OBJS_server) $(OBJS_client)

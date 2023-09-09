@@ -25,6 +25,7 @@
         "singly_linked_list_opt.h": "c",
         "type_traits": "c",
         "pthread.h": "c",
-        "signal.h": "c"
+        "signal.h": "c",
+        "double_linked_list_opt.h": "c"
     }
 }
