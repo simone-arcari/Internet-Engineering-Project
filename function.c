@@ -851,10 +851,10 @@ void *handle_client(void *arg) {
 
 
         } else if (strcmp(buffer, "close") == 0) {
-            free(client_info);
 
 
             thread_kill(tid, pos_client);
+            free(client_info);
 
         } else {
             printf("%sComando non riconosciuto%s\n", RED, RESET);
@@ -874,7 +874,7 @@ void thread_kill(pthread_t tid, node_t *pos_client) {
     remove_node(client_list, pos_client);
     n_clt <= 30 ? print_list(client_list):0;
 
-
+printf("pos: %p\n", pos_client);
     printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
     pthread_exit(NULL);   
 }
@@ -885,6 +885,7 @@ void thread_kill(pthread_t tid, node_t *pos_client) {
 */
 void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((unused)) *info, void __attribute__((unused)) *context) {
     struct sockaddr_in client_address;
+    node_t *pos = tail(client_list);
 
 
     printf("\b\b%sSegnale Ctrl+C. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
@@ -892,18 +893,14 @@ void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((
 
     /* Chiudo la connessione con tutti i client */
     while (is_empty(client_list) == false) {
-printf("pos: %p\n", pos_client);
 
-
-
-        client_address = get_value(pos_client);
-        //close_connection(server_socket, client_address);
+        client_address = get_value(pos);
+        close_connection(server_socket, client_address);
 
         n_clt--;
         printf("CLIENT RIMOSSO DALLA LISTA: %s%ld client connessi%s\n", BOLDBLUE, n_clt, RESET);
-        pos_client = remove_node(client_list, pos_client);
+        pos = remove_node(client_list, pos);
         n_clt <= 30 ? print_list(client_list):0;
-
 
     }
     
