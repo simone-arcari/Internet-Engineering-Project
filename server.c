@@ -2,16 +2,8 @@
     gcc server.c -o server -lpthread
 
 
-    ritorno errori al client 
-
-
-    scrivere quali funzioni voglio o no la lock prima di essere chiamate
-
-
-    lock sulle sendto anche nei sendto di close_connection
-
-
-    wait in close_connection(forse non serve se uno fa bene i mutex)
+    
+    mettere allarm o qualche timer per il comando put con nome inesistentye
 
 */
 /**

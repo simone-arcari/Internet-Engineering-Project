@@ -429,7 +429,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
 
     /* Apro il file in modalità lettura binaria */
     file = fopen(full_path, "rb");
-    if (file == NULL) {
+    if (file == NULL || filename[0] == '\0') {
         printf("Errore[%d] fopen(): %s\n", errno , strerror(errno));
 
         if (errno == ENOENT) {
@@ -874,7 +874,7 @@ void thread_kill(pthread_t tid, node_t *pos_client) {
     remove_node(client_list, pos_client);
     n_clt <= 30 ? print_list(client_list):0;
 
-printf("pos: %p\n", pos_client);
+
     printf("THREAD[%s%ld%s] TERMINATO\n", BOLDGREEN, tid, RESET);
     pthread_exit(NULL);   
 }

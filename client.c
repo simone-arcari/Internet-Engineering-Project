@@ -598,7 +598,7 @@ JUMP:
 
 
 
-        } else if (strncmp(buffer, "get ", 4) == 0) {    /* Download file dal server*/          
+        } else if (strncmp(buffer, "get ", 4) == 0) {    /* Download file dal server*/         
             char* filename = buffer + 4;
             if (download_file(client_socket, filename) < 0) {
 
