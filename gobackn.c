@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <netdb.h>
 #include <pthread.h>
 
 
@@ -19,7 +20,6 @@ typedef struct {
     size_t msg_size;
     int flags;
     struct sockaddr *addr; 
-    socklen_t addr_len;
 } Thread_data;
 
 
@@ -49,6 +49,8 @@ typedef struct {
 
 
 // Dichiarazioni globali
+extern pthread_mutex_t mutex_rcv;              // mutex per la gestione della ricezione
+extern pthread_mutex_t mutex_snd;              // mutex per la gestione degli invii
 Packet sender_buffer[WINDOW_SIZE];
 int sender_base = 0;
 int next_sequence_number = 0;
@@ -102,7 +104,6 @@ void *send_packets(void *arg) {
     Thread_data *args = (Thread_data*)arg;
     int socket = args->socket;
     struct sockaddr *addr = args->addr; 
-    socklen_t addr_len = args->addr_len;
 
     size_t data_size;                           // dimensione in byte dei dati effettivamente trasmessi dal pachhetto corrente 
     size_t msg_size = args->msg_size;           // dimensione in byte del messaggio
@@ -124,7 +125,7 @@ void *send_packets(void *arg) {
     }
 
 
-    // Imposto i timer con sequece_number -1 per indicare che non sono attivi
+    // Imposto i timer con sequence_number -1 per indicare che sono inizialmente disattivati
     for (int i = 0; i < WINDOW_SIZE; i++) {    
         timers[i].sequence_number = -1;
 
@@ -154,7 +155,9 @@ void *send_packets(void *arg) {
             sender_buffer[next_sequence_number % WINDOW_SIZE] = packet;
 
             // Invia il pacchetto
-            sendto(socket, &packet, sizeof(packet), 0, addr, addr_len);
+            mutex_lock(&mutex_snd);
+            sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(addr));
+            mutex_unlock(&mutex_snd);
 
             // Avvia il timer per il pacchetto appena inviato
             timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
@@ -177,14 +180,15 @@ void *send_packets(void *arg) {
 }
 
 
-// Funzione per ricevere un ACK
+// Funzione per ricevere gli ack dei pacchetti inviati
 void *receive_acks(void *arg) {
     Packet packet;
     Ack received_ack;
     Thread_data *args = (Thread_data*)arg;
     int socket = args->socket;
-    struct sockaddr *addr = args->addr; 
-    socklen_t addr_len = args->addr_len;
+    struct sockaddr *addr = args->addr;
+    struct sockaddr addr_recived;
+    socklen_t addr_len;
     u_int8_t sequence_number_to_retransmit;
     time_t current_time;
     
@@ -203,13 +207,26 @@ void *receive_acks(void *arg) {
 
                     // Effettua la ritrasmissione del pacchetto con sequence_number_to_retransmit
                     packet = sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
-                    sendto(socket, &packet, sizeof(packet), 0, addr, addr_len);
+                    mutex_lock(&mutex_snd);
+                    sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(addr));
+                    mutex_unlock(&mutex_snd);
                 }
             }
         }
 
+        mutex_lock(&mutex_rcv);
+        recvfrom(socket, &received_ack, sizeof(received_ack), MSG_PEEK, (struct sockaddr *)&addr_recived, &addr_len); // non sto consumando i dati
 
-        recvfrom(args->socket, &received_ack, sizeof(received_ack), 0, addr, addr_len);
+        // Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti
+        if (memcmp(addr, &addr_recived, addr_len) != 0) {
+            mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
+
+
+            continue; // in caso non corrispondano ignoro il messaggio e ritento fino allo scadere del timer
+        }
+
+        recvfrom(socket, &received_ack, sizeof(received_ack), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
+        mutex_unlock(&mutex_rcv);
 
 
         // Verifica la checksum dell'ACK ricevuto
@@ -252,15 +269,15 @@ void *receive_acks(void *arg) {
 }
 
 
-
+/*
+    NOTA: il massimo numero di byte che può essere gestito dipende dal massimo numero di sequence_number rappresentabile;
+    in particolare abbiamo 1 byte ovvero 8 bit quindi 256 possibili sequence_number distinti, ogni pacchetto dei 256 
+    possibili può portare DATA_SIZE byte, ergo max_byte = 256*DATA_SIZE, in caso di dimesioni superiori sarà compito
+    del livello applicativo gestire la segmetazione dei messaggi per il mittente e il riassemblaggio per il destinatario
+*/
 void send_msg(int socket, const void *buf, size_t n, int flags, struct sockaddr *addr, socklen_t addr_len) {
     pthread_t send_thread, receive_thread;
     Thread_data args = {socket, buf, n , flags, addr, addr_len};
-
-
-
-
-
 
     // Creazione dei thread per l'invio dei pacchetti e la ricezione degli ACK
     pthread_create(&send_thread, NULL, send_packets, &args);
@@ -269,5 +286,10 @@ void send_msg(int socket, const void *buf, size_t n, int flags, struct sockaddr 
     // Attendere la terminazione dei thread figli
     pthread_join(send_thread, NULL);
     pthread_join(receive_thread, NULL);
+}
+
+
+void rcv_msg(int socket, const void *buf, size_t n, int flags, struct sockaddr *addr, socklen_t addr_len) {
+    // questa funzione si occuppa di ricevere i pacchetti e assemblarli correttamente in base al loro numero di sequenza e inviare gli ack ai pacchetti
 }
 
