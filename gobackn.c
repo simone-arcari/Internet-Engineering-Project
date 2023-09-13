@@ -1,3 +1,4 @@
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -7,6 +8,7 @@
 
 #define WINDOW_SIZE 4
 #define DATA_SIZE 256
+#define TIMEOUT_SECONDS 5
 #define ACK 0b10101011
 
 
@@ -25,6 +27,7 @@ typedef struct {
 typedef struct {
     u_int8_t sequence_number;
     u_int8_t data[DATA_SIZE];
+    size_t data_size;
     u_int8_t checksum;              // Campo per la checksum
 } Packet;
 
@@ -37,12 +40,21 @@ typedef struct {
 } Ack;
 
 
+// Struttura per i gestire i timer
+typedef struct {
+    u_int8_t sequence_number;
+    time_t start_time;
+} Timer;
+
+
+
 // Dichiarazioni globali
 Packet sender_buffer[WINDOW_SIZE];
 int sender_base = 0;
 int next_sequence_number = 0;
 int last_packet_acked = -1;
 int last_packet = -2;
+Timer timers[WINDOW_SIZE];
 
 
 // Mutex per la sincronizzazione tra i thread
@@ -57,6 +69,8 @@ u_int8_t calculate_checksum(Packet packet) {
         checksum += packet.data[i];
 
     }
+
+    checksum += packet.data_size;
     return checksum;
 }
 
@@ -100,6 +114,7 @@ void *send_packets(void *arg) {
     size_t residue_packet_size = msg_size%DATA_SIZE;      // calcola la taglia del pachetto residuo che tipicamente è minore di DATA_SIZE
 
 
+    // Tengo traccia di quanti pacchetti ho effettivametne (si conta da zero)
     if (residue_packet_size == 0) {
         last_packet = number_of_full_packets-1;  // si conta da zero
 
@@ -109,10 +124,18 @@ void *send_packets(void *arg) {
     }
 
 
+    // Imposto i timer con sequece_number -1 per indicare che non sono attivi
+    for (int i = 0; i < WINDOW_SIZE; i++) {    
+        timers[i].sequence_number = -1;
+
+    }
+
+
     while (true) {
         // Controlla se c'è spazio nel buffer di trasmissione
         if (next_sequence_number < sender_base + WINDOW_SIZE) {
 
+            // assegno la corretta dimensione al pacchetto corrente
             if (next_sequence_number == number_of_full_packets) {
                 data_size = residue_packet_size;
 
@@ -122,15 +145,20 @@ void *send_packets(void *arg) {
             }
 
             // crea il pacchetto
-            packet.sequence_number = next_sequence_number;
-            memcpy(packet.data, buffer_ptr, data_size); 
-            packet.checksum = calculate_checksum(packet);      // Calcola la checksum
+            packet.sequence_number = next_sequence_number;      // imposta il seq_num del pacchetto
+            packet.data_size = data_size;                       // imposta la taglia effettiva dei byte utili di data
+            memcpy(packet.data, buffer_ptr, data_size);         // assegna il campo data
+            packet.checksum = calculate_checksum(packet);       // Calcola la checksum
 
-            // Aggiungi il pacchetto al buffer di trasmissione
+            // Aggiungi il pacchetto al buffer di ritrasmissione
             sender_buffer[next_sequence_number % WINDOW_SIZE] = packet;
 
             // Invia il pacchetto
             sendto(socket, &packet, sizeof(packet), 0, addr, addr_len);
+
+            // Avvia il timer per il pacchetto appena inviato
+            timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
+            timers[packet.sequence_number % WINDOW_SIZE].start_time = time(NULL);
 
             // Avanza il numero di sequenza e il puntatore al buffer
             next_sequence_number++;
@@ -139,36 +167,72 @@ void *send_packets(void *arg) {
         }
 
 
+        // Tutti i pacchetti inviati e riscontrati correttamente
         if (last_packet_acked == last_packet) {
+            
             return NULL;
-
         }
 
     }
 }
 
+
 // Funzione per ricevere un ACK
 void *receive_acks(void *arg) {
+    Packet packet;
     Ack received_ack;
     Thread_data *args = (Thread_data*)arg;
     int socket = args->socket;
     struct sockaddr *addr = args->addr; 
     socklen_t addr_len = args->addr_len;
+    u_int8_t sequence_number_to_retransmit;
+    time_t current_time;
+    
 
- 
     while (true) {
+
+        // Controlla se il timer è scaduto per un pacchetto
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+
+            if (timers[i].sequence_number != -1) {
+                current_time = time(NULL);
+
+                if (current_time - timers[i].start_time >= TIMEOUT_SECONDS) {
+                    // Timer scaduto per il pacchetto, ritransmettere il pacchetto
+                    int sequence_number_to_retransmit = timers[i].sequence_number;
+
+                    // Effettua la ritrasmissione del pacchetto con sequence_number_to_retransmit
+                    packet = sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
+                    sendto(socket, &packet, sizeof(packet), 0, addr, addr_len);
+                }
+            }
+        }
+
+
         recvfrom(args->socket, &received_ack, sizeof(received_ack), 0, addr, addr_len);
+
 
         // Verifica la checksum dell'ACK ricevuto
         if (verify_ack_checksum(received_ack)) {
 
-            // ACK ricevuto correttamente, aggiornare il base sender
+            // ACK ricevuto correttamente, aggiornare il base sender e azzerare il timer
             if (received_ack.sequence_number >= sender_base) {
+
+                // Azzera il timer per il pacchetto ricevuto
+                for (int i = 0; i < WINDOW_SIZE; i++) {
+                    if (timers[i].sequence_number <= received_ack.sequence_number) {
+                        timers[i].sequence_number = -1; // Segna il timer come non attivo
+
+                    }
+                }
 
                 last_packet_acked = received_ack.sequence_number;
 
-                if (last_packet_acked )
-                sender_base = received_ack.sequence_number + 1;
+                // Aggiorna il base sender sempre se la finestra non è arrivata alla fine
+                if (last_packet_acked <= last_packet-WINDOW_SIZE) {
+                    sender_base = received_ack.sequence_number + 1;
+
+                }
                 
             }
 
@@ -178,13 +242,13 @@ void *receive_acks(void *arg) {
         }
 
 
+        // Tutti i pacchetti inviati e riscontrati correttamente
         if (last_packet_acked == last_packet) {
+            
             return NULL;
-
         }
 
     }
-    return NULL;
 }
 
 
