@@ -34,6 +34,7 @@
 #include <netinet/in.h>
 #include "double_linked_list_opt.h"
 #include "function.h"
+#include "gobackn.h"
 
 
 #define DEFAULT_PORT 8888

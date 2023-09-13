@@ -1,3 +1,14 @@
+/**
+ * @file gobackn.c
+ * @brief Breve descrizione del file.
+ *
+ * 
+ *
+ * @authors Simone Arcari, Valeria Villano
+ * @date 2023-09-13 (nel formato YYYY-MM-DD)
+ */
+
+
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,46 +17,8 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <pthread.h>
-
-
-#define WINDOW_SIZE 4       // la dovrò fare variabile nel tempo
-#define DATA_SIZE 256
-#define TIMEOUT_SECONDS 5
-#define ACK 0b10101011
-
-
-// Struttura per passagio dati ai threads
-typedef struct {
-    int socket;
-    const void *buffer; 
-    size_t msg_size;
-    struct sockaddr *addr; 
-} Thread_data;
-
-
-// Struttura per i pacchetti
-typedef struct {
-    u_int8_t sequence_number;       // inidici tra 0 e 255
-    u_int8_t data[DATA_SIZE];       // contenuto del pacchetto
-    size_t data_size;               // numero byte informativi di data[] 
-    bool last_pck;                  // indica al destinatario se è o no l'ultimo pacchetto
-    u_int8_t checksum;              // Campo per la checksum
-} Packet;
-
-
-// Struttura per gli ack
-typedef struct {
-    u_int8_t sequence_number;       // inidici tra 0 e 255
-    u_int8_t ack_code;              // indica che si tratta di un ack
-    u_int8_t checksum;              // Campo per la checksum
-} Ack;
-
-
-// Struttura per i gestire i timer
-typedef struct {
-    int sequence_number;
-    time_t start_time;
-} Timer;
+#include "gobackn.h"
+#include "function.h"
 
 
 
@@ -76,7 +49,6 @@ u_int8_t calculate_checksum(Packet packet) {
     return checksum;
 }
 
-
 // Funzione per calcolare la checksum degli ack
 u_int8_t calculate_ack_checksum(Ack ack) {
     u_int8_t checksum;
@@ -85,18 +57,15 @@ u_int8_t calculate_ack_checksum(Ack ack) {
     return checksum;
 }
 
-
 // Funzione per verificare la checksum di un pacchetto
 bool verify_checksum(Packet packet) {
     return packet.checksum == calculate_checksum(packet);
 }
 
-
 // Funzione per verificare la checksum di un ack
 bool verify_ack_checksum(Ack ack) {
     return ack.checksum == calculate_ack_checksum(ack);
 }
-
 
 // Funzione per inviare pacchetti
 void *send_packets(void *arg) {
@@ -107,7 +76,7 @@ void *send_packets(void *arg) {
 
     size_t data_size;                           // dimensione in byte dei dati effettivamente trasmessi dal pachhetto corrente 
     size_t msg_size = args->msg_size;           // dimensione in byte del messaggio
-    void *buffer_ptr = args->buffer;                  // ad ogni iterazione punta l'inizio della zona di memoria per formare il pacchetto corrente
+    void *buffer_ptr = (void*)args->buffer;                  // ad ogni iterazione punta l'inizio della zona di memoria per formare il pacchetto corrente
 
     int last_packet;
     int number_of_full_packets = msg_size/DATA_SIZE;      // calcola il numero di pacchetti che avranno taglia massima
@@ -166,7 +135,7 @@ void *send_packets(void *arg) {
 
             // Avanza il numero di sequenza e il puntatore al buffer
             next_sequence_number++;
-            buffer_ptr += sizeof(packet.data);      // tutti i calcoli sono riferiti all'unità intesa in byte
+            buffer_ptr += packet.data_size;      // tutti i calcoli sono riferiti all'unità intesa in byte
 
         }
 
@@ -180,7 +149,6 @@ void *send_packets(void *arg) {
     }
 }
 
-
 // Funzione per ricevere gli ack dei pacchetti inviati
 void *receive_acks(void *arg) {
     Packet packet;
@@ -190,7 +158,7 @@ void *receive_acks(void *arg) {
     struct sockaddr *addr = args->addr;
     struct sockaddr addr_recived;
     socklen_t addr_len;
-    u_int8_t sequence_number_to_retransmit;
+    int sequence_number_to_retransmit;
     time_t current_time;
     
 
@@ -204,7 +172,7 @@ void *receive_acks(void *arg) {
 
                 if (current_time - timers[i].start_time >= TIMEOUT_SECONDS) {
                     // Timer scaduto per il pacchetto, ritransmettere il pacchetto
-                    int sequence_number_to_retransmit = timers[i].sequence_number;
+                    sequence_number_to_retransmit = timers[i].sequence_number;
 
                     // Effettua la ritrasmissione del pacchetto con sequence_number_to_retransmit
                     packet = sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
@@ -291,7 +259,6 @@ int get_last(bool received_packet[256]) {
     return 255;
 }
 
-
 /*
     Se è noto il seq_num dell'ultimo pacchetto si può verificare che tutte le entry siano state ricevute
 */
@@ -312,9 +279,8 @@ bool check_end_transmission(bool received_packet[256], int last_pck) {
     }
 }
 
-
 void assembly_msg(Packet receiver_buffer[256], int last_pck, const void *buffer) {
-    void *buffer_ptr = buffer;
+    void *buffer_ptr = (void*)buffer;
     Packet packet;
     size_t size;
     
@@ -329,7 +295,6 @@ void assembly_msg(Packet receiver_buffer[256], int last_pck, const void *buffer)
     }
 
 }
-
 
 /*
     NOTA: il massimo numero di byte che può essere gestito dipende dal massimo numero di sequence_number rappresentabile;
@@ -350,7 +315,6 @@ void send_msg(int socket, const void *buffer, size_t msg_size, struct sockaddr *
     pthread_join(receive_thread, NULL);
 }
 
-
 /*
     Questa funzione si occuppa di ricevere i pacchetti e assemblarli correttamente in base al loro numero di sequenza e inviare gli ack ai pacchetti
 
@@ -368,7 +332,7 @@ void rcv_msg(int socket, const void *buf, struct sockaddr *addr, socklen_t addr_
     int current;
     int last_packet_acked = -1;
     int last_pck = -1;
-    int receiver_base = -1;
+
 
     while (true) {
         mutex_lock(&mutex_rcv);
@@ -425,9 +389,9 @@ void rcv_msg(int socket, const void *buf, struct sockaddr *addr, socklen_t addr_
         if (check_end_transmission(received_packet, last_pck)) {
 
             // Assembla il messaggio
-            assembly_msg(received_packet, last_pck, buf);
+            assembly_msg(receiver_buffer, last_pck, buf);
             
-            return NULL;
+            return;
         }
     }
 }
