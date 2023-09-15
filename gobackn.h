@@ -27,8 +27,8 @@
 #define DATA_SIZE 8
 #define TIMEOUT_SECONDS 100
 #define ACK 0b10101011
-#define IS_LAST_PCK 0b11111111
-#define NOT_LAST_PCK 0b00001111
+#define IS_LAST_PCK 0b00111111
+#define NOT_LAST_PCK 0b00000000
 #define NOT_DEFINE 0b00000000;
 
 
@@ -39,7 +39,7 @@ typedef struct {
     u_int8_t sequence_number;       // inidici tra 0 e 255
     u_int8_t data[DATA_SIZE];       // contenuto del pacchetto
     size_t data_size;               // numero byte informativi di data[] 
-    u_int8_t last_pck;              // indica al destinatario se è o no l'ultimo pacchetto 
+    u_int8_t last_pck_flag;         // indica al destinatario se è o no l'ultimo pacchetto 
     u_int8_t checksum;              // Campo per la checksum
 } Packet;
 

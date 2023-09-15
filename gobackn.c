@@ -6,6 +6,42 @@
  *
  * @authors Simone Arcari, Valeria Villano
  * @date 2023-09-13 (nel formato YYYY-MM-DD)
+ * 
+ * 
+
+
+qunado compilo con -DSERVER non va mutex_lock(mutex) in send_:packets
+
+
+primo pacchetto ricevuto con flag errato 255
+
+
+
+gdb ./server
+layout next    invio invio invio
+b nome funzione
+r (runna)
+n (step)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ *          
  */
 
 
@@ -47,7 +83,7 @@ u_int8_t calculate_checksum(Packet packet) {
     }
 
     checksum += packet.data_size;
-    checksum += packet.last_pck;
+    checksum += packet.last_pck_flag;
 
     return checksum;
 }
@@ -134,12 +170,14 @@ void *send_packets(void *arg) {
             }
 
             // crea il pacchetto
-            packet.sequence_number = next_sequence_number;                          // imposta il seq_num del pacchetto
-            packet.data_size = data_size;                                           // imposta la taglia effettiva dei byte utili di data
-            memcpy(packet.data, buffer_ptr, data_size);                             // assegna il campo data
-            packet.checksum = calculate_checksum(packet);                           // Calcola la checksum
-            packet.last_pck = (next_sequence_number == *(args->last_packet)) ? IS_LAST_PCK:NOT_LAST_PCK;   // indica se questo è lultimo pacchetto della trasmissione
-printf("packet.last_pck: %d\n", packet.last_pck);
+            packet.sequence_number = next_sequence_number;                                                      // imposta il seq_num del pacchetto
+            packet.data_size = data_size;                                                                       // imposta la taglia effettiva dei byte utili di data
+            memcpy(packet.data, buffer_ptr, data_size);                                                         // assegna il campo data
+            packet.last_pck_flag = (next_sequence_number == *(args->last_packet)) ? IS_LAST_PCK:NOT_LAST_PCK;   // indica se questo è lultimo pacchetto della trasmissione
+            packet.checksum = calculate_checksum(packet);                                                       // Calcola la checksum
+
+
+printf("packet.last_pck: %d\n", packet.last_pck_flag);
 
             // Aggiungi il pacchetto al buffer di ritrasmissione
             args->sender_buffer[next_sequence_number % WINDOW_SIZE] = packet;
@@ -150,6 +188,8 @@ printf("packet.last_pck: %d\n", packet.last_pck);
 
             // Invia il pacchetto
 #ifdef SERVER
+
+            printf("pacchetto: %d\n", packet.sequence_number);
             mutex_lock(&mutex_snd);
             sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
             mutex_unlock(&mutex_snd);
@@ -253,6 +293,8 @@ void *receive_acks(void *arg) {
 
         recvfrom(socket, &received_ack, sizeof(received_ack), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
+        printf("ack: %d\n", received_ack.sequence_number);
+
 #else
         printf("ack: %d\n", received_ack.sequence_number);
         recvfrom(socket, &received_ack, sizeof(received_ack), 0, NULL, NULL);
@@ -335,21 +377,18 @@ int get_last(bool received_packet[256]) {
 /*
     Se è noto il seq_num dell'ultimo pacchetto si può verificare che tutte le entry siano state ricevute
 */
-bool check_end_transmission(bool received_packet[256], int last_pck) {
+bool check_end_transmission(bool received_packet[256], int last_packet) {
 
-    if (last_pck < 0) {
+    if (last_packet < 0) {
 
         return false;   // non è ancora noto quanti pacchetti siano effettivamente
     }
 
 
-    if (get_last(received_packet) == last_pck) {
+    if (get_last(received_packet) == last_packet) {
 
-
-        printf("last_pck: %d         ", last_pck);
+        printf("last_pck: %d", last_packet);
         printf("get_last(received_packet): %d\n", get_last(received_packet));
-
-
 
         return true;
     } else {
@@ -438,10 +477,10 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
 
     int current;
     int last_packet_acked = -1;
-    int last_pck = -1;
-
+    int last_packet = -1;
 
     while (true) {
+
 
         // Ricezione Pacchetto
 #ifdef SERVER
@@ -459,6 +498,7 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
         recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)&addr_recived, addr_len_ptr); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
 #else
+        printf("FLAG DISATTIVATA\n");
         printf("pacchetto: %d\n", packet.sequence_number);
         recvfrom(socket, &packet, sizeof(packet), 0, NULL, NULL); // ho consumato i dati
 
@@ -472,9 +512,9 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
 
             // Pacchetto ricevuto correttamente, aggiornare il receiver_buffer 
             receiver_buffer[packet.sequence_number] = packet;
-            last_pck = (packet.last_pck == IS_LAST_PCK) ? packet.sequence_number:-1;
-            printf("last_pck: %d\n", last_pck);
-            printf("packet.last_pck: %d\n", packet.last_pck);
+            last_packet = (packet.last_pck_flag == IS_LAST_PCK) ? packet.sequence_number:-1;
+            printf("last_pck: %d\n", last_packet);
+            printf("packet.last_pck: %d\n", packet.last_pck_flag);
 
 
 
@@ -511,10 +551,10 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
 
 
         // Verifica che tutti i pacchetti siano stati ricevuti
-        if (check_end_transmission(received_packet, last_pck)) {
+        if (check_end_transmission(received_packet, last_packet)) {
 
             // Assembla il messaggio
-            assembly_msg(receiver_buffer, last_pck, buffer);
+            assembly_msg(receiver_buffer, last_packet, buffer);
 
 printf("msg: %s\n", (char*)buffer);
 printf("FINE\n");

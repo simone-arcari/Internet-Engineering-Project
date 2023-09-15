@@ -1,23 +1,17 @@
 CC = gcc
-CFLAGS_server = -Wall -Wextra -lpthread -DSERVER
+CFLAGS_server = -Wall -Wextra -lpthread 
 CFLAGS_client = -Wall -Wextra -lpthread
 SRCS_server = server.c double_linked_list_opt.c function.c gobackn.c
 SRCS_client = client.c gobackn.c
-OBJS_server = $(SRCS_server:.c=.o)
-OBJS_client = $(SRCS_client:.c=.o)
+
 TARGET = server client
 
-all: $(TARGET)
 
-server: $(OBJS_server)
-	$(CC) $(CFLAGS_server) $(OBJS_server) -o server 
 
-client: $(OBJS_client)
-	$(CC) $(CFLAGS_client) $(OBJS_client) -o client
 
-%.o: %.c
-	$(CC) $(CFLAGS_client) $< -c -o $@
+all:
+	@gcc -g -o server $(SRCS_server)  $(CFLAGS_server) 
+	@gcc -g -o client $(SRCS_client) $(CFLAGS_client)
 
-.PHONY: clean
-clean:
-	-$(RM) server client $(OBJS_server) $(OBJS_client)
+rm:
+	find . -type f ! -name "*.c" ! -name "*.txt" ! -name "*.h" ! -name "Makefile" ! -name "*.out" -print0 | xargs -0 rm -v
