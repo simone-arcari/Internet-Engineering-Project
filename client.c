@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "gobackn.h"
 
 
 
@@ -32,6 +33,7 @@
 //#define IP_SERVER "192.168.1.78"     // PER PROVE FUORI CASA
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
+#define TIMEOUT_CONNECTION 2000
 
 
 #define RESET     "\033[0m"
@@ -173,20 +175,23 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     /* Imposto scadenza del timer */
-    alarm(15);
+    alarm(TIMEOUT_CONNECTION);
 
 
     /* Risposta del server */
-    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
-    if (bytes_received < 0) {
-        printf("Errore recvfrom(): %s\n", strerror(errno));
+//    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+//    if (bytes_received < 0) {
+//        printf("Errore recvfrom(): %s\n", strerror(errno));
 
 
-        return EXIT_ERROR;
-    } 
+//        return EXIT_ERROR;
+//    } 
 
 
-    buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
+//    buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
+    memset(buffer, 0, MAX_BUFFER_SIZE);
+    rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+    //printf("HO RICEVUTO: %s\n", buffer);
 
 
     /* Reset scadenza del timer */
@@ -194,7 +199,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     /* Esito della connessione */
-    if (strcmp(buffer, "connected") == 0) {
+    if (strcmp(buffer, "connectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnected") == 0) {
         printf("SERVER CONNESSO\n");
 
         

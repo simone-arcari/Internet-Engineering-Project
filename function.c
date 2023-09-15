@@ -26,6 +26,7 @@
 #include <netinet/in.h>
 #include "double_linked_list_opt.h"
 #include "function.h"
+#include "gobackn.h"
 
 
 /* Dichiarazione esterna delle variabili globali */
@@ -139,26 +140,34 @@ int accept_client(int server_socket, struct sockaddr_in client_address) {
 
 
     /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
-    if (mutex_lock(&mutex_snd) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+ //   if (mutex_lock(&mutex_snd) < 0) {
+ //       printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
-        return EXIT_ERROR;
-    }
+ //       return EXIT_ERROR;
+ //   }
 
 
     /* Invio conferma della connessione */
-    snprintf(buffer, MAX_BUFFER_SIZE, "connected");
-    if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
-        printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
-        mutex_unlock(&mutex_snd);
+    snprintf(buffer, MAX_BUFFER_SIZE, "connectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnected");
+
+    mutex_unlock(&mutex_rcv);
 
 
-        return EXIT_ERROR;
-    }
+    send_msg(server_socket, buffer, strlen(buffer), (struct sockaddr *)&client_address);
+printf("FINE INVIO MESSAGGIO\n");
 
 
-    mutex_unlock(&mutex_snd);
+ //   if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
+ //       printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
+ //       mutex_unlock(&mutex_snd);
+
+
+ //       return EXIT_ERROR;
+  //  }
+
+
+//    mutex_unlock(&mutex_snd);
     start_time = time(NULL);     // tempo di inizio del timer
 
 
