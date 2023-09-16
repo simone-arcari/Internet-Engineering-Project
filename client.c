@@ -26,17 +26,25 @@
 
 
 
-#define MAX_BUFFER_SIZE 1024
+#define MAX_BUFFER_SIZE 1024            // 1kB per invio ricezione messaggi livello applicativo
+#define MAX_BUFFER_FILE_SIZE 32768      // 32kB per ricezione invio file (il server deve inviare frammenti file massimo da 32kB)
+
 #define DEFAULT_PORT 8888
-//#define IP_SERVER "192.168.1.22"    // PC FISSO
-//#define IP_SERVER "192.168.1.27"    // PC PORTATILE
-//#define IP_SERVER "192.168.1.78"     // PER PROVE FUORI CASA
 #define IP_SERVER "127.0.0.1"
 
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
+
+#define SMALL_SIZE  1024        // 1kB  valore oltre il quale si considera un file "small" prima di questo valore lo si considera "micro"
+#define MEDIUM_SIZE 10240       // 10kB valore oltre il quale si considera un file "medium"
+#define LARGE_SIZE  1048576     // 1MB  valore oltre il quale si considera un file "large"
+
+#define FRAGMENT_MICRO_SIZE     1024    // 1kB     dimensione dei frammenti del file passati al livello di trasporto 
+#define FRAGMENT_SMALL_SIZE     8192    // 8kB     dimensione dei frammenti del file passati al livello di trasporto
+#define FRAGMENT_MEDIUM_SIZE    16384   // 16kB    dimensione dei frammenti del file passati al livello di trasporto
+#define FRAGMENT_LARGE_SIZE     32768   // 32kB    dimensione dei frammenti del file passati al livello di trasporto (il client deve poter ricever frammenti file fino a 32kB)
+
 #define EXIT_ERROR -1
 #define TIMEOUT_CONNECTION 10
-
 
 #define RESET     "\033[0m"
 #define BOLD      "\033[1m"
@@ -77,6 +85,9 @@
 int client_socket;
 struct sockaddr_in server_address;
 pthread_mutex_t mutex;
+
+struct sigaction sa1;
+struct sigaction sa2;
 
 
 /*
@@ -163,6 +174,7 @@ RETRY:
     return directory;
 }
 
+
 /*
     Implementa la logica per richiedere una connessione ad un server UDP
     Utilizza la socket client_socket e l'indirizzo del client server_address
@@ -184,7 +196,13 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
-    rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+    if (bytes_received < 0) {
+        printf("Errore rcv_msg(): %s\n", strerror(errno));
+
+
+        return EXIT_ERROR;
+    }
 
 
     /* Reset scadenza del timer */
@@ -220,21 +238,14 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 */
 int receive_file_list(int client_socket) {
     int bytes_received;
-    char buffer[MAX_BUFFER_SIZE];
+    char buffer[MAX_BUFFER_FILE_SIZE];
 
 
-    /* Blocco il mutex prima di leggere dalla socket */
-    if (mutex_lock(&mutex) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-        exit(EXIT_FAILURE);
-    }
-
-
-    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+    /* Ricevo la lista */
+    memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
+    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
     if (bytes_received < 0) {
-        printf("Errore recvfrom(): %s\n", strerror(errno));
+        printf("Errore rcv_msg(): %s\n", strerror(errno));
 
 
         return EXIT_ERROR;
@@ -244,7 +255,6 @@ int receive_file_list(int client_socket) {
     buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
     printf("\n%s%sLista file inviata dal server:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
     printf("%s%s%s\n", YELLOW, buffer, RESET);
-    mutex_unlock(&mutex);
 
 
     return EXIT_SUCCESS;
@@ -259,16 +269,9 @@ int download_file(int client_socket, char* filename) {
     DIR *directory;
     FILE *file;
     int bytes_received;
-    char buffer[MAX_BUFFER_SIZE];
-
-
-    /* Blocco il mutex prima di leggere dalla socket */
-    if (mutex_lock(&mutex) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-        return EXIT_FAILURE;
-    }
+    int num_frammenti = 0;
+    char buffer[MAX_BUFFER_FILE_SIZE];
+    char full_path[MAX_BUFFER_SIZE]; 
 
 
     /* Verifico l'esistenza della cartella */
@@ -282,7 +285,6 @@ int download_file(int client_socket, char* filename) {
 
 
     /* Compongo il percorso completo del file */
-    char full_path[MAX_BUFFER_SIZE]; 
     snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
 
 
@@ -297,18 +299,28 @@ int download_file(int client_socket, char* filename) {
 
 
     while (1) {
-        bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
+        printf("%s<--- INIZIO RICEZIONE FRAMMENTO --->%s\n", BLUE, RESET);
+        
+        memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
+        bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
         if (bytes_received < 0) {
-            printf("Errore recvfrom(): %s\n", strerror(errno));
+            printf("Errore rcv_msg(): %s\n", strerror(errno));
 
 
             return EXIT_ERROR;
         }
 
+        num_frammenti++;
+        printf("bytes_received: %d\n", bytes_received);
+        printf("%s<--- FINE RICEZIONE FRAMMENTO[%d] --->%s\n", BLUE, num_frammenti, RESET);
 
         /* Ricezione completata */
         if (bytes_received == 0) {
 
+            if (num_frammenti == 1) {   // se il primo frammento è vuoto è un segnale di errore
+
+                return EXIT_ERROR;
+            }
 
             break;
         }
@@ -320,7 +332,6 @@ int download_file(int client_socket, char* filename) {
 
     fclose(file);   // Chiudo il file
     closedir(directory);
-    mutex_unlock(&mutex);
     printf("FILE RICEVUTO CON SUCCESSO\n\n");
 
 
@@ -332,51 +343,115 @@ int download_file(int client_socket, char* filename) {
     Implementa la logica per inviare un file al server
     Utilizza la socket client_socket, l'indirizzo del client server_address e il nome del file filename
 */
-int upload_file(int client_socket, struct sockaddr_in server_address, char* filename) {
+int upload_file(int server_socket, struct sockaddr_in client_address, char* filename) {
     DIR *directory;
     FILE *file;
     size_t bytes_read;
-    char buffer[MAX_BUFFER_SIZE];
+    long file_size;
+    long buffer_size;
+    char *buffer;
+    char full_path[MAX_BUFFER_SIZE];
 
 
     /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
     if (directory == NULL) {
-        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
+        printf("Errore[%d] check_directory(): %s\n", errno , strerror(errno));
 
-
+       
         return EXIT_ERROR;
     }
 
-/*
-    // Compongo il percorso completo del file
-    char full_path[MAX_BUFFER_SIZE]; 
-    snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
-*/
 
     /* Apro il file in modalità lettura binaria */
     file = fopen(filename, "rb");
-    if (file == NULL) {
-        printf("Errore[%d] fopen(): %s\n",errno , strerror(errno));
+    if (file == NULL || filename[0] == '\0') {
+        printf("Errore[%d] fopen(): %s\n", errno , strerror(errno));
+
+        if (errno == ENOENT) {
+            // Invio frammento vuoto
+            printf("FILE INESISTENTE\n");
+            if (send_msg(server_socket, NULL, 0, (struct sockaddr *)&client_address) < 0) {
+                printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
+                return EXIT_ERROR;
+            }
+
+            return EXIT_ERROR;
+        } else {
+
+            return EXIT_ERROR;
+        }
+    }
+
+
+    /* Ricavo le dimesioni del file */
+    fseek(file, 0, SEEK_END);   // Posiziono il cursore alla fine del file
+    file_size = ftell(file);    // Ottengo la posizione corrente del cursore (che è la dimensione del file)
+    fseek(file, 0, SEEK_SET);   // Riporta il cursore all'inizio del file
+
+
+    /* Assegno dimensione del buffer */
+    if (file_size < SMALL_SIZE) {
+        buffer_size = FRAGMENT_MICRO_SIZE;
+
+
+    } else if (file_size < MEDIUM_SIZE) {
+        buffer_size = FRAGMENT_SMALL_SIZE;
+
+
+    } else if (file_size < LARGE_SIZE) {
+        buffer_size = FRAGMENT_MEDIUM_SIZE;
+
+
+    } else {
+        buffer_size = FRAGMENT_LARGE_SIZE;
+
+
+    }
+
+
+    /* Alloco memoria */
+    buffer = (char *)malloc(buffer_size);
+    if (buffer == NULL) {
+        printf("Errore[%d] malloc(): %s\n", errno, strerror(errno));
 
 
         return EXIT_ERROR;
     }
 
 
+    memset(buffer, 0, buffer_size);
+
+
+    printf("DIMENSIONE FILE: %ld BYTE\n", file_size);
+    printf("TAGLIA FRAMMENTI FILE: %ld BYTE\n", buffer_size);
+
+
     /* Invio dei pacchetti del file al client */
-    while ((bytes_read = fread(buffer, 1, MAX_BUFFER_SIZE, file)) > 0) {
-        sendto(client_socket, buffer, bytes_read, 0, (struct sockaddr *)&server_address, sizeof(server_address));
+    while ((bytes_read = fread(buffer, 1, buffer_size, file)) > 0) {
+        printf("%s<--- INIZIO INVIO FRAMMENTO --->%s\n", BLUE, RESET);
+
+        if (send_msg(server_socket, buffer, bytes_read, (struct sockaddr *)&client_address) < 0) {
+            printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
+            return EXIT_ERROR;
+        }    
+
+        printf("%s<--- FINE INVIO FRAMMENTO --->%s\n", BLUE, RESET);
     }
 
-
     /* Invio di un pacchetto vuoto come segnale di completamento */
-    sendto(client_socket, NULL, 0, 0, (struct sockaddr *)&server_address, sizeof(server_address));
+    printf("%s<--- INIZIO INVIO FRAMMENTO VUOTO --->%s\n", GREEN, RESET);
+    if (send_msg(server_socket, NULL, 0, (struct sockaddr *)&client_address) < 0) {
+        printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
+        return EXIT_ERROR;
+    }
+    printf("%s<--- FINE INVIO FRAMMENTO VUOTO --->%s\n", GREEN, RESET);
 
 
+    free(buffer);
     fclose(file);
     closedir(directory);
-    printf("FILE INVIATO CON SUCCESSO\n\n");
+    printf("FILE INVIATO CON SUCCESSO\n");
 
 
     return EXIT_SUCCESS;
@@ -391,7 +466,7 @@ void *receive_thread(void __attribute__((unused)) *arg) {
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
-        /* Blocco il mutex prima di leggere dalla socket */
+        /* Verifico se dispongo del permesso per proseguire */
         if (mutex_lock(&mutex) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
@@ -420,11 +495,6 @@ void *receive_thread(void __attribute__((unused)) *arg) {
                     
             exit(EXIT_SUCCESS);
         }
-
-
-        mutex_unlock(&mutex);
-
-
     }
     
 
@@ -443,8 +513,12 @@ void handle_ctrl_c(int __attribute__((unused)) signum, siginfo_t __attribute__((
     
 
     /* Invio del comando al server */
-    sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+    if (send_msg(client_socket, buffer, strlen(buffer), (struct sockaddr *)&server_address) < 0) {
+        printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
 
+
+        exit(EXIT_FAILURE);
+    }    
 
     if (close(client_socket) < 0) {
         printf("Errore close(): %s\n", strerror(errno)); 
@@ -469,12 +543,8 @@ void handle_alarm(int __attribute__((unused)) signum) {
 }
 
 
-int main(int argc, char *argv[]) {
-    char buffer[MAX_BUFFER_SIZE];
-    struct sigaction sa1;
-    struct sigaction sa2;
+void client_setup() {
     pthread_t tid;
-    
 
     /* Configurazione di sigaction per Ctrl+c */
     sa1.sa_sigaction = handle_ctrl_c;    // funzione di gestione del segnale
@@ -552,14 +622,32 @@ int main(int argc, char *argv[]) {
     }
 
 
+    /* Blocco il mutex prima di avviare il thread per la ricezione del segnale di fine connessione */
+    if (mutex_lock(&mutex) < 0) {
+        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        
+
+        exit(EXIT_FAILURE);
+    }
+
+
     /* Creo un thread per la ricezione asincrona di un eventuale messaggio di fine connessione */
     if (pthread_create(&tid, NULL, receive_thread, NULL) != 0) {
         printf("Errore pthread_create(): %s\n", strerror(errno)); 
 
 
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
+}
 
+
+int main(int argc, char *argv[]) {
+    char buffer[MAX_BUFFER_SIZE];
+    
+
+    /* Incapsula tutto il codice per inizializzare il client e le sue risorse */
+    client_setup();
+    
 
     /* Per debug */
     if (argc == 2) {
@@ -574,7 +662,7 @@ int main(int argc, char *argv[]) {
 
 
     /* Richiesta di input da parte dell'utente */
-    while (1) { 
+    while (true) { 
         printf("%s%s%s: ", BOLDGREEN, argv[0], RESET);
         printf("Inserisci un comando (list, get <nome_file>, put <path/nome_file>): %s", BOLDYELLOW);
         fgets(buffer, MAX_BUFFER_SIZE, stdin);
@@ -582,8 +670,8 @@ int main(int argc, char *argv[]) {
         printf("%s", RESET);
 
 JUMP:
+
         /* Invio del comando al server */
-        //sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
         if (send_msg(client_socket, buffer, strlen(buffer), (struct sockaddr *)&server_address) < 0) {
             printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
 
@@ -592,9 +680,8 @@ JUMP:
         }
         
 
-
         /* Gestore del comando inviato */
-        if (strcmp(buffer, "list") == 0) {  /* Richiesta della lista dei file disponibili al server*/
+        if (strcmp(buffer, "list") == 0) {               /* Richiesta della lista dei file disponibili al server*/
             if (receive_file_list(client_socket) < 0) {
 
 
@@ -605,6 +692,24 @@ JUMP:
 
         } else if (strncmp(buffer, "get ", 4) == 0) {    /* Download file dal server*/         
             char* filename = buffer + 4;
+
+            /* Verifico se è presente il nome del file */
+            if (strlen(buffer) == 4) {
+                printf("NOME FILE MANCANTE\n");
+                
+                
+                exit(EXIT_FAILURE);
+            }
+
+            /* Verifico se il nome fornito inizia con uno spazio */
+            if (filename[0] == ' ') {
+                printf("NOME NON VALIDO\n");
+                
+                
+                exit(EXIT_FAILURE);
+            }
+
+            /* Ricevo il file */
             if (download_file(client_socket, filename) < 0) {
 
 
@@ -615,6 +720,24 @@ JUMP:
 
         } else if (strncmp(buffer, "put ", 4) == 0) {    /* Upload file al server */
             char* filename = buffer + 4;
+
+            /* Verifico se è presente il nome del file */
+            if (strlen(buffer) == 4) {
+                printf("NOME FILE MANCANTE\n");
+                
+                
+                exit(EXIT_FAILURE);
+            }
+
+            /* Verifico se il nome fornito inizia con uno spazio */
+            if (filename[0] == ' ') {
+                printf("NOME NON VALIDO\n");
+                
+                
+                exit(EXIT_FAILURE);
+            }
+
+            /* Invio il file */
             if (upload_file(client_socket, server_address, filename) < 0) {
 
 
@@ -623,7 +746,7 @@ JUMP:
 
 
 
-        } else if (strcmp(buffer, "close") == 0) {  /* Chiusura programma e chiusura della socket del client */
+        } else if (strcmp(buffer, "close") == 0) {       /* Chiusura programma e chiusura della socket del client */
             if (close(client_socket) < 0) {
                 printf("Errore close(): %s\n", strerror(errno)); 
 
@@ -634,8 +757,10 @@ JUMP:
 
             exit(EXIT_SUCCESS);
         }
-    }
 
+
+        mutex_unlock(&mutex); // diamo il permesso a receive_thread di verificare la presenza del segnale di fine connessione 
+    }
 
 
     exit(EXIT_SUCCESS);

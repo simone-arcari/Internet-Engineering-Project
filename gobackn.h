@@ -24,10 +24,10 @@
 
 
 #define WINDOW_SIZE 4       // la dovrò fare variabile nel tempo
-#define DATA_SIZE 8
+#define DATA_SIZE 1024
 #define TIMEOUT_ACKS 1
 #define TIMEOUT_RCV 5
-#define MAX_TIMEOUT_FAIL 15
+#define MAX_TIMEOUT_FAIL 10
 #define ACK 0b10101011
 #define PROBABILITY 0
 

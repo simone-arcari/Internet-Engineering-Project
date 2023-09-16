@@ -116,13 +116,15 @@ void *send_packets(void *arg) {
 
     }
 
-
     // Tengo traccia di quanti pacchetti ho effettivametne (si conta da zero)
-    if (residue_packet_size == 0) {
-        *(args->last_packet) = number_of_full_packets-1;  // se la divisione è esatta 
+    if (msg_size == 0) {
+        *(args->last_packet) = 0;                           // se si vuole inviare un pacchetto vuoto
+
+    } else if (residue_packet_size == 0) {
+        *(args->last_packet) = number_of_full_packets-1;    // se la divisione è esatta 
 
     } else {
-        *(args->last_packet) = number_of_full_packets;   // se abbiamo una rimanenza di byte aggiungiamo un ultimo pacchetto con campo data_size opportuno
+        *(args->last_packet) = number_of_full_packets;      // se abbiamo una rimanenza di byte aggiungiamo un ultimo pacchetto con campo data_size opportuno
 
     }
 
@@ -137,13 +139,17 @@ void *send_packets(void *arg) {
         if (next_sequence_number < *(args->sender_base) + WINDOW_SIZE && next_sequence_number <= *(args->last_packet)) {
 
             // assegno la corretta dimensione al pacchetto corrente
-            if (next_sequence_number == *(args->last_packet) && residue_packet_size != 0) {
+            if (msg_size == 0) {
+                data_size = 0;  // caso in cui si vuole inviare un pacchetto vuoto
+
+            } else if (next_sequence_number == *(args->last_packet) && residue_packet_size != 0) {
                 data_size = residue_packet_size;    // ultimo pacchetto con campo data_size opportuno
 
             } else {
                 data_size = DATA_SIZE;              // taglia standard
 
             }
+
 
             // crea il pacchetto
             packet.sequence_number = next_sequence_number;                                        // imposta il seq_num del pacchetto
@@ -180,6 +186,7 @@ void *send_packets(void *arg) {
             args->timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
             args->timers[packet.sequence_number % WINDOW_SIZE].start_time = time(NULL);
             args->timers[packet.sequence_number % WINDOW_SIZE].num_timeout_fail = 0;
+
 
             // Avanza il numero di sequenza e il puntatore al buffer
             next_sequence_number++;
@@ -246,36 +253,7 @@ void *receive_acks(void *arg) {
 
 
     while (true) {
-        mutex_lock(mutex);
-
-        // Controlla se il timer è scaduto per un pacchetto
-        for (int i = 0; i < WINDOW_SIZE; i++) {
-
-            if (args->timers[i].sequence_number != -1) {  // solo se il timer è attivo
-                current_time = time(NULL);
-
-                // Timer scaduto per il pacchetto, ritransmettere il pacchetto
-                if (current_time - args->timers[i].start_time >= TIMEOUT_ACKS) {
-                    
-                    sequence_number_to_retransmit = args->timers[i].sequence_number;
-                    packet = args->sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
-
-                    // Effettua la ritrasmissione del pacchetto con sequence_number_to_retransmit
-#ifdef SERVER
-                    mutex_lock(&mutex_snd);
-                    sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
-                    mutex_unlock(&mutex_snd);
-#else
-                    sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
-#endif
-                }
-            }
-        }
-
-
-        mutex_unlock(mutex);
-
-
+ 
         // Ricezione Ack
 #ifdef SERVER
         mutex_lock(&mutex_rcv);
@@ -284,7 +262,7 @@ void *receive_acks(void *arg) {
         // Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti
         if (memcmp(addr, &addr_recived, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
-            mutex_lock(mutex);
+            mutex_unlock(mutex);
 
             continue; // in caso non corrispondano ignoro il messaggio e ritento fino allo scadere del timer
         }
@@ -469,6 +447,7 @@ ssize_t assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer) {
     ssize_t bytes_received = 0;
     
     for (int seq_num = 0; seq_num <= last_pck; seq_num++) {
+        
 
         packet = receiver_buffer[seq_num];
         size = packet.data_size;
@@ -560,7 +539,11 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr
 
     bool boolean_variable;
     double random_value;
-    double p = PROBABILITY;                    // probabilità perdità (tra 0 e 1)
+    double p = PROBABILITY;             // probabilità perdità (tra 0 e 1)
+
+
+    memset(receiver_buffer, 0, sizeof(receiver_buffer));
+    memset(received_packet, 0, sizeof(received_packet));
 
 
     // Inizializza il generatore di numeri casuali con il tempo attuale come seme
@@ -609,21 +592,25 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr
         if (verify_checksum(packet) && boolean_variable) {
             printf("ricevuto pacchetto: %d\n", packet.sequence_number);
 
+
             // Reset timer
             start_time = time(NULL); 
+
 
             // Pacchetto ricevuto correttamente, aggiornare il receiver_buffer 
             receiver_buffer[packet.sequence_number] = packet;
             last_packet = (packet.last_pck_flag == true) ? packet.sequence_number:-1;
 
+
             // Da qui si implemeta la funzionalità che permette al mittente di sfruttare gli ack cumulativi
             received_packet[packet.sequence_number] = true;     // marco la rispettiva entry come ricevuta ed archiviata
             current = get_last(received_packet);
 
+
             if (current > last_packet_acked) {
                 last_packet_acked = current;
 
-
+                
                 // crea il pacchetto di ack
                 ack.sequence_number = last_packet_acked;
                 ack.ack_code = ACK;
@@ -652,10 +639,6 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr
 
             // Assembla il messaggio
             bytes_received = assembly_msg(receiver_buffer, last_packet, buffer);
-
-            printf("msg: %s\n", (char*)buffer);
-           
-            
             return bytes_received;
         }
     }

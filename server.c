@@ -242,6 +242,8 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
                 continue;   // in caso di errore non terminiamo ma continiamo con il ciclo successivo
             }
+mutex_unlock(&mutex_rcv);
+while(true){}
 
 
         } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */
