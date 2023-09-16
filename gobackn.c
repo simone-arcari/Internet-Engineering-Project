@@ -10,36 +10,12 @@
  * 
 
 
-qunado compilo con -DSERVER non va mutex_lock(mutex) in send_:packets
-
-
-primo pacchetto ricevuto con flag errato 255
-
-
 
 gdb ./server
 layout next    invio invio invio
 b nome funzione
 r (runna)
 n (step)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
  *          
  */
@@ -98,13 +74,11 @@ u_int8_t calculate_ack_checksum(Ack ack) {
 
 // Funzione per verificare la checksum di un pacchetto
 bool verify_checksum(Packet packet) {
-    return true;
     return packet.checksum == calculate_checksum(packet);
 }
 
 // Funzione per verificare la checksum di un ack
 bool verify_ack_checksum(Ack ack) {
-    return true;
     return ack.checksum == calculate_ack_checksum(ack);
 }
 
@@ -112,6 +86,7 @@ bool verify_ack_checksum(Ack ack) {
 void *send_packets(void *arg) {
     Thread_data *args = (Thread_data*)arg;
     pthread_mutex_t *mutex = args->mutex;
+    pthread_t receive_thread, timeout_thread;
 
     int socket = args->socket;
     struct sockaddr *addr = args->addr; 
@@ -137,6 +112,7 @@ void *send_packets(void *arg) {
     // Imposto i timer con sequence_number -1 per indicare che sono inizialmente disattivati
     for (int i = 0; i < WINDOW_SIZE; i++) {    
         args->timers[i].sequence_number = -1;
+        args->timers[i].num_timeout_fail = 0;
 
     }
 
@@ -170,42 +146,40 @@ void *send_packets(void *arg) {
             }
 
             // crea il pacchetto
-            packet.sequence_number = next_sequence_number;                                                      // imposta il seq_num del pacchetto
-            packet.data_size = data_size;                                                                       // imposta la taglia effettiva dei byte utili di data
-            memcpy(packet.data, buffer_ptr, data_size);                                                         // assegna il campo data
-            packet.last_pck_flag = (next_sequence_number == *(args->last_packet)) ? IS_LAST_PCK:NOT_LAST_PCK;   // indica se questo è lultimo pacchetto della trasmissione
-            packet.checksum = calculate_checksum(packet);                                                       // Calcola la checksum
+            packet.sequence_number = next_sequence_number;                                        // imposta il seq_num del pacchetto
+            packet.data_size = data_size;                                                         // imposta la taglia effettiva dei byte utili di data
+            memcpy(packet.data, buffer_ptr, data_size);                                           // assegna il campo data
+            packet.last_pck_flag = (next_sequence_number == *(args->last_packet)) ? true:false;   // indica se questo è lultimo pacchetto della trasmissione
+            packet.checksum = calculate_checksum(packet);                                         // Calcola la checksum
 
-
-printf("packet.last_pck: %d\n", packet.last_pck_flag);
 
             // Aggiungi il pacchetto al buffer di ritrasmissione
             args->sender_buffer[next_sequence_number % WINDOW_SIZE] = packet;
 
 
-            mutex_unlock(mutex);
-
-
             // Invia il pacchetto
 #ifdef SERVER
-
-            printf("pacchetto: %d\n", packet.sequence_number);
             mutex_lock(&mutex_snd);
             sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
             mutex_unlock(&mutex_snd);
 
 #else
-            printf("pacchetto: %d\n", packet.sequence_number);
             sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
 #endif
+            printf("inviato pacchetto: %d\n", packet.sequence_number);
 
 
-            mutex_lock(mutex);
+            // Dopo l'invio del primo pacchetto avviamo il thread per la ricezione degli ack e per i timeout
+            if (packet.sequence_number == 0) {
+                pthread_create(&receive_thread, NULL, receive_acks, args);
+                pthread_create(&timeout_thread, NULL, timeout_acks, args);
+            }
 
 
             // Avvia il timer per il pacchetto appena inviato
             args->timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
             args->timers[packet.sequence_number % WINDOW_SIZE].start_time = time(NULL);
+            args->timers[packet.sequence_number % WINDOW_SIZE].num_timeout_fail = 0;
 
             // Avanza il numero di sequenza e il puntatore al buffer
             next_sequence_number++;
@@ -213,12 +187,30 @@ printf("packet.last_pck: %d\n", packet.last_pck_flag);
         }
 
 
-        // Tutti i pacchetti inviati e riscontrati correttamente
+        // Se avvengono troppi timeout per uno stesso pacchetto
+        if (*(args->max_timeout_flag) == true) {
+
+            // Termina i thread figli
+            pthread_cancel(receive_thread);
+            pthread_cancel(timeout_thread);
+
+            
+            // Aspetta la loro effettiva terminazione
+            pthread_join(timeout_thread, NULL);
+            pthread_join(receive_thread, NULL);
+
+            
+            pthread_exit((void*)EXIT_ERROR);
+        }
+
+
+        // Se tutti i pacchetti vengono inviati e riscontrati correttamente
         if (*(args->last_packet_acked) == *(args->last_packet)) {
             mutex_unlock(mutex);
-            printf("SND PCK FINITO\n");
+            pthread_join(receive_thread, NULL);
+            pthread_join(timeout_thread, NULL);
 
-            return NULL;
+            pthread_exit((void*)EXIT_SUCCESS);
         }
 
         mutex_unlock(mutex);
@@ -244,7 +236,13 @@ void *receive_acks(void *arg) {
     time_t current_time;
     int sequence_number_to_retransmit;
 
-    //sleep(1);
+    bool boolean_variable;
+    double random_value;
+    double p = PROBABILITY;                    // probabilità perdità (tra 0 e 1)
+
+
+    // Inizializza il generatore di numeri casuali con il tempo attuale come seme
+    srand(time(NULL));
 
 
     while (true) {
@@ -257,7 +255,7 @@ void *receive_acks(void *arg) {
                 current_time = time(NULL);
 
                 // Timer scaduto per il pacchetto, ritransmettere il pacchetto
-                if (current_time - args->timers[i].start_time >= TIMEOUT_SECONDS) {
+                if (current_time - args->timers[i].start_time >= TIMEOUT_ACKS) {
                     
                     sequence_number_to_retransmit = args->timers[i].sequence_number;
                     packet = args->sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
@@ -293,10 +291,7 @@ void *receive_acks(void *arg) {
 
         recvfrom(socket, &received_ack, sizeof(received_ack), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
-        printf("ack: %d\n", received_ack.sequence_number);
-
 #else
-        printf("ack: %d\n", received_ack.sequence_number);
         recvfrom(socket, &received_ack, sizeof(received_ack), 0, NULL, NULL);
 #endif
         // Fine ricezione Ack
@@ -305,8 +300,14 @@ void *receive_acks(void *arg) {
         mutex_lock(mutex);
 
 
+        // Genera un numero casuale tra 0 e 1
+        random_value = (double)rand() / RAND_MAX;
+        boolean_variable = (random_value > p);
+
+
         // Verifica la checksum dell'ACK ricevuto
-        if (verify_ack_checksum(received_ack)) {
+        if (verify_ack_checksum(received_ack) && boolean_variable) {
+            printf("ricevuto ack: %d\n", received_ack.sequence_number);
 
             // ACK ricevuto correttamente, aggiornare il base sender e azzerare il timer
             if (received_ack.sequence_number >= *(args->last_packet_acked)) {
@@ -324,8 +325,6 @@ void *receive_acks(void *arg) {
                 *(args->sender_base) = received_ack.sequence_number + 1;
 
 
-
-
                 // Aggiorna il base sender sempre se la finestra non è arrivata alla fine
                 if (*(args->last_packet_acked) <= *(args->last_packet)-WINDOW_SIZE) {
 
@@ -339,16 +338,85 @@ void *receive_acks(void *arg) {
         }
 
 
-        // Tutti i pacchetti inviati e riscontrati correttamente
+        // Se tutti i pacchetti vengono inviati e riscontrati correttamente
         if (*(args->last_packet_acked) == *(args->last_packet)) {
             mutex_unlock(mutex);
-            printf("RECV ACKS FINITO\n");
             
             return NULL;
         }
 
         mutex_unlock(mutex);
 
+    }
+}
+
+void *timeout_acks(void *arg) {
+    Thread_data *args = (Thread_data*)arg;
+    pthread_mutex_t *mutex = args->mutex;
+
+    int socket = args->socket;
+    Packet packet;
+    struct sockaddr addr_recived;
+    struct sockaddr *addr = args->addr;
+    socklen_t addr_len;
+
+    Ack received_ack;
+    time_t current_time;
+    int sequence_number_to_retransmit;
+
+
+    while (true) {
+        mutex_lock(mutex);
+
+        // Controlla se il timer è scaduto per un pacchetto
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+
+            if (args->timers[i].sequence_number != -1) {  // solo se il timer è attivo
+
+                current_time = time(NULL);
+
+                // Timer scaduto per il pacchetto, ritransmettere il pacchetto
+                if (current_time - args->timers[i].start_time >= TIMEOUT_ACKS) {
+                    
+                    sequence_number_to_retransmit = args->timers[i].sequence_number;
+                    packet = args->sender_buffer[sequence_number_to_retransmit % WINDOW_SIZE];
+
+                    // Effettua la ritrasmissione del pacchetto con sequence_number_to_retransmit
+#ifdef SERVER
+                    mutex_lock(&mutex_snd);
+                    sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
+                    mutex_unlock(&mutex_snd);
+#else
+                    sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
+#endif
+                    printf("rinviato pacchetto: %d\n", packet.sequence_number);
+
+                    // Avvia il timer per il pacchetto appena rinviato
+                    args->timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
+                    args->timers[packet.sequence_number % WINDOW_SIZE].start_time = time(NULL);
+                    args->timers[packet.sequence_number % WINDOW_SIZE].num_timeout_fail += 1;
+
+                    if (args->timers[packet.sequence_number % WINDOW_SIZE].num_timeout_fail >= MAX_TIMEOUT_FAIL) {
+                        *(args->max_timeout_flag) = true;
+                        mutex_unlock(mutex);
+
+                        return NULL;
+                    }
+
+                }
+            }
+        }
+
+
+        // Se tutti i pacchetti vengono inviati e riscontrati correttamente
+        if (*(args->last_packet_acked) == *(args->last_packet)) {
+            mutex_unlock(mutex);
+
+            return NULL;
+        }
+
+
+        mutex_unlock(mutex);
     }
 }
 
@@ -387,9 +455,6 @@ bool check_end_transmission(bool received_packet[256], int last_packet) {
 
     if (get_last(received_packet) == last_packet) {
 
-        printf("last_pck: %d", last_packet);
-        printf("get_last(received_packet): %d\n", get_last(received_packet));
-
         return true;
     } else {
 
@@ -397,10 +462,11 @@ bool check_end_transmission(bool received_packet[256], int last_packet) {
     }
 }
 
-void assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer) {
+ssize_t assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer) {
     void *buffer_ptr = (void*)buffer;
     Packet packet;
     size_t size;
+    ssize_t bytes_received = 0;
     
     for (int seq_num = 0; seq_num <= last_pck; seq_num++) {
 
@@ -410,8 +476,10 @@ void assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer) {
         memcpy(buffer_ptr, &packet.data, size);
         buffer_ptr += size;
 
+        bytes_received += size;
     }
 
+    return bytes_received;
 }
 
 /*
@@ -420,9 +488,9 @@ void assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer) {
     possibili può portare DATA_SIZE byte, ergo max_byte = 256*DATA_SIZE, in caso di dimesioni superiori sarà compito
     del livello applicativo gestire la segmetazione dei messaggi per il mittente e il riassemblaggio per il destinatario
 */
-void send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
-    pthread_t send_thread, receive_thread;
-    pthread_mutex_t mutex;
+int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
+    pthread_t send_thread;
+    int exit_status;
 
 
     Packet sender_buffer[WINDOW_SIZE];
@@ -430,6 +498,8 @@ void send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) 
     int last_packet_acked = -1;
     int last_packet = -2;
     Timer timers[WINDOW_SIZE];
+    bool max_timeout_flag = false;
+    pthread_mutex_t mutex;
 
 
     // Inizializzo il mutex per gestrire l'accesso alle variabili condivise 
@@ -437,24 +507,28 @@ void send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) 
         printf("Errore[%d] pthread_mutex_init(): %s\n", errno , strerror(errno));
 
        
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
 
-    Thread_data args = {socket, buffer, msg_size, addr, sender_buffer, &sender_base, &last_packet_acked, &last_packet, timers, &mutex};
+    Thread_data args = {socket, buffer, msg_size, addr, sender_buffer, &sender_base, &last_packet_acked, &last_packet, timers, &max_timeout_flag, &mutex};
 
 
     // Creazione dei thread per l'invio dei pacchetti e la ricezione degli ACK
-    pthread_create(&receive_thread, NULL, receive_acks, &args);
     pthread_create(&send_thread, NULL, send_packets, &args);
 
 
-    // Attendere la terminazione del thread figlio
-    pthread_join(send_thread, NULL);
-    printf("FINE THREADS\n");
+    // Attesa della terminazione del thread e recupero del valore di uscita
+    if (pthread_join(send_thread, (void**)&exit_status) != 0) {
+        perror("Errore nell'attesa della terminazione del thread");
 
+        return EXIT_ERROR;
+    }
 
-    return;
+    // Libera risorse
+    pthread_mutex_destroy(&mutex);
+
+    return exit_status;
 }
 
 /*
@@ -465,7 +539,7 @@ void send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) 
     possibili può portare DATA_SIZE byte, ergo max_byte = 256*DATA_SIZE, in caso di dimesioni superiori sarà compito
     del livello applicativo gestire la segmetazione dei messaggi per il mittente e il riassemblaggio per il destinatario
 */
-void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_len_ptr) {
+ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_len_ptr) {
     Packet packet;
     Ack ack;
 
@@ -474,13 +548,36 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
     
     struct sockaddr addr_recived;
     socklen_t addr_len;
+    ssize_t bytes_received = 0;
 
     int current;
     int last_packet_acked = -1;
     int last_packet = -1;
 
+    time_t start_time = time(NULL);     // tempo di inizio del timer
+    time_t current_time;
+    time_t elapsed_time;
+
+    bool boolean_variable;
+    double random_value;
+    double p = PROBABILITY;                    // probabilità perdità (tra 0 e 1)
+
+
+    // Inizializza il generatore di numeri casuali con il tempo attuale come seme
+    srand(time(NULL));
+
+
     while (true) {
 
+        // Calcolo il tempo trascorso 
+        current_time = time(NULL);
+        elapsed_time = current_time - start_time;
+
+        if (elapsed_time >= TIMEOUT_RCV) {
+
+            return EXIT_ERROR;
+        }
+        
 
         // Ricezione Pacchetto
 #ifdef SERVER
@@ -498,26 +595,26 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
         recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)&addr_recived, addr_len_ptr); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
 #else
-        printf("FLAG DISATTIVATA\n");
-        printf("pacchetto: %d\n", packet.sequence_number);
         recvfrom(socket, &packet, sizeof(packet), 0, NULL, NULL); // ho consumato i dati
-
-
 #endif
         // Fine ricezione pacchetto
 
 
+        // Genera un numero casuale tra 0 e 1
+        random_value = (double)rand() / RAND_MAX;
+        boolean_variable = (random_value > p);
+
+
         // Verifica la checksum del pacchetto ricevuto
-        if (verify_checksum(packet)) {
+        if (verify_checksum(packet) && boolean_variable) {
+            printf("ricevuto pacchetto: %d\n", packet.sequence_number);
+
+            // Reset timer
+            start_time = time(NULL); 
 
             // Pacchetto ricevuto correttamente, aggiornare il receiver_buffer 
             receiver_buffer[packet.sequence_number] = packet;
-            last_packet = (packet.last_pck_flag == IS_LAST_PCK) ? packet.sequence_number:-1;
-            printf("last_pck: %d\n", last_packet);
-            printf("packet.last_pck: %d\n", packet.last_pck_flag);
-
-
-
+            last_packet = (packet.last_pck_flag == true) ? packet.sequence_number:-1;
 
             // Da qui si implemeta la funzionalità che permette al mittente di sfruttare gli ack cumulativi
             received_packet[packet.sequence_number] = true;     // marco la rispettiva entry come ricevuta ed archiviata
@@ -532,15 +629,15 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
                 ack.ack_code = ACK;
                 ack.checksum = calculate_ack_checksum(ack);
 
-                // Invia il pacchetto
+                // Invia Ack
 #ifdef SERVER
                 mutex_lock(&mutex_snd);
                 sendto(socket, &ack, sizeof(ack), 0, addr, sizeof(*addr));
                 mutex_unlock(&mutex_snd);
 #else
-                printf("ack: %d\n", ack.sequence_number);
                 sendto(socket, &ack, sizeof(ack), 0, addr, sizeof(*addr));
 #endif
+                printf("inviato ack: %d\n", ack.sequence_number);
 
             }
 
@@ -554,17 +651,15 @@ void rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_le
         if (check_end_transmission(received_packet, last_packet)) {
 
             // Assembla il messaggio
-            assembly_msg(receiver_buffer, last_packet, buffer);
+            bytes_received = assembly_msg(receiver_buffer, last_packet, buffer);
 
-printf("msg: %s\n", (char*)buffer);
-printf("FINE\n");
+            printf("msg: %s\n", (char*)buffer);
            
             
-            return;
+            return bytes_received;
         }
     }
 }
-
 
 
 

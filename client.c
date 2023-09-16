@@ -35,7 +35,7 @@
 
 #define PATH_FILE_FOLDER "file_folder_client"   // Path per la cartella preposta per i file
 #define EXIT_ERROR -1
-#define TIMEOUT_CONNECTION 2000
+#define TIMEOUT_CONNECTION 10
 
 
 #define RESET     "\033[0m"
@@ -172,6 +172,9 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
     char buffer[MAX_BUFFER_SIZE] = "connect";
 
 
+    printf("TENTATIVO DI CONNESSIONE\n");
+
+
     /* Invio del comando al server */
     sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -180,20 +183,8 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
     alarm(TIMEOUT_CONNECTION);
 
 
-    /* Risposta del server */
-//    bytes_received = recvfrom(client_socket, buffer, sizeof(buffer), 0, NULL, NULL);
-//    if (bytes_received < 0) {
-//        printf("Errore recvfrom(): %s\n", strerror(errno));
-
-
-//        return EXIT_ERROR;
-//    } 
-
-
-//    buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
     memset(buffer, 0, MAX_BUFFER_SIZE);
     rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
-    //printf("HO RICEVUTO: %s\n", buffer);
 
 
     /* Reset scadenza del timer */
@@ -201,25 +192,25 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     /* Esito della connessione */
-    if (strcmp(buffer, "connectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnected") == 0) {
-        printf("SERVER CONNESSO\n");
-
+    if (strcmp(buffer, "connected") == 0) {
         
         /* Invio del comando al server */
         snprintf(buffer, MAX_BUFFER_SIZE, "ack");
-        sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+        if (send_msg(client_socket, buffer, strlen(buffer), (struct sockaddr *)&server_address) < 0) {
+            printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
 
 
+            return EXIT_ERROR;
+        }
+
+        printf("SERVER CONNESSO\n");
         return EXIT_SUCCESS;
         
     } else {
+
         printf("SERVER NON CONNESSO\n");
-
-
         return EXIT_ERROR;
-    }
-
-    
+    } 
 }
 
 
@@ -592,7 +583,14 @@ int main(int argc, char *argv[]) {
 
 JUMP:
         /* Invio del comando al server */
-        sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+        //sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
+        if (send_msg(client_socket, buffer, strlen(buffer), (struct sockaddr *)&server_address) < 0) {
+            printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
+
+
+            exit(EXIT_FAILURE);
+        }
+        
 
 
         /* Gestore del comando inviato */

@@ -121,22 +121,22 @@ int thread_start(int server_socket, struct sockaddr_in client_address, node_t *p
 /*
     Implementa la logica per accettare una connessione da un client UDP
     Utilizza la socket server_socket e l'indirizzo del client client_address
-    NOTA: questa funzione va chiamata senza aver effettuato una lock prima (la fa la funzione stessa al suo interno)
+    NOTA: questa funzione va chiamata senza aver effettuato una lock prima
 */
 int accept_client(int server_socket, struct sockaddr_in client_address) {
     char buffer[MAX_BUFFER_SIZE];
-    struct sockaddr_in client_address_expected;
+//    struct sockaddr_in client_address_expected;
     socklen_t addr_len;
     ssize_t bytes_received;
-    time_t start_time;
-    time_t current_time;
-    time_t elapsed_time;
-    time_t max_duration = 15;               // durata massima in secondi del timer
+//    time_t start_time;
+//    time_t current_time;
+//    time_t elapsed_time;
+//    time_t max_duration = 15;               // durata massima in secondi del timer
 
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
     addr_len = sizeof(client_address);
-    client_address_expected = client_address;
+//    client_address_expected = client_address;
 
 
     /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
@@ -149,13 +149,14 @@ int accept_client(int server_socket, struct sockaddr_in client_address) {
 
 
     /* Invio conferma della connessione */
-    snprintf(buffer, MAX_BUFFER_SIZE, "connectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnectedconnected");
-
+    snprintf(buffer, MAX_BUFFER_SIZE, "connected");
     mutex_unlock(&mutex_rcv);
+    if (send_msg(server_socket, buffer, strlen(buffer), (struct sockaddr *)&client_address) < 0) {
+        printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
 
 
-    send_msg(server_socket, buffer, strlen(buffer), (struct sockaddr *)&client_address);
-printf("FINE INVIO MESSAGGIO\n");
+        return EXIT_ERROR;
+    }
 
 
  //   if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
@@ -168,14 +169,14 @@ printf("FINE INVIO MESSAGGIO\n");
 
 
 //    mutex_unlock(&mutex_snd);
-    start_time = time(NULL);     // tempo di inizio del timer
+//    start_time = time(NULL);     // tempo di inizio del timer
 
-
+/*
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
 
-        /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
+        /* Blocco per implementare una logica di sincronizzazione sicura tra i threads 
         if (mutex_lock(&mutex_rcv) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
@@ -184,12 +185,12 @@ printf("FINE INVIO MESSAGGIO\n");
         }
 
 
-        /* Calcolo il tempo trascorso */
+        /* Calcolo il tempo trascorso 
         current_time = time(NULL);
         elapsed_time = current_time - start_time;
 
 
-        /* Esco dal ciclo se sono passati più di 15 secondi */
+        /* Esco dal ciclo se sono passati più di 15 secondi 
         if (elapsed_time >= max_duration) {
             printf("CONNESSIONE NON RIUSCITA, TIMER SCADUTO\n");
 
@@ -198,7 +199,7 @@ printf("FINE INVIO MESSAGGIO\n");
         }
 
 
-        /* Ricezione messaggio di ACK per connessione a tre vie senza consumare i dati */
+        /* Ricezione messaggio di ACK per connessione a tre vie senza consumare i dati 
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -209,7 +210,7 @@ printf("FINE INVIO MESSAGGIO\n");
         }
 
 
-        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti */
+        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti 
         if (memcmp(&client_address, &client_address_expected, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
 
@@ -218,7 +219,7 @@ printf("FINE INVIO MESSAGGIO\n");
         }
 
 
-        /* Consumazione effettiva dei dati dalla socket */
+        /* Consumazione effettiva dei dati dalla socket 
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -231,6 +232,16 @@ printf("FINE INVIO MESSAGGIO\n");
 
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
         break; // se sono arrivato qui esco dal ciclo
+    }
+*/
+
+    memset(buffer, 0, MAX_BUFFER_SIZE);
+    bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address, &addr_len);
+    if (bytes_received < 0) {
+        printf("Errore[%d] rcv_msg(): %s\n", errno, strerror(errno));
+
+
+        return EXIT_ERROR;
     }
 
 
@@ -249,7 +260,7 @@ printf("FINE INVIO MESSAGGIO\n");
 
 
     /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
-    mutex_unlock(&mutex_rcv); 
+    //mutex_unlock(&mutex_rcv); 
 
 
     return EXIT_SUCCESS;
@@ -751,7 +762,20 @@ void *handle_client(void *arg) {
         addr_len = sizeof(client_address);
 
 
-        /* Blocco il mutex prima di leggere dalla socket */
+        bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address, &addr_len);
+        if (bytes_received < 0) {
+            printf("Errore[%d] rcv_msg(): %s\n", errno, strerror(errno));
+            close_connection(server_socket, client_address);    // chiudere la connessione + messaggio errore
+            free(client_info);
+
+            thread_kill(tid, pos_client);
+        }
+
+
+
+
+
+        /* Blocco il mutex prima di leggere dalla socket 
         if (mutex_lock(&mutex_rcv) < 0) {
             printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
             
@@ -764,7 +788,7 @@ void *handle_client(void *arg) {
         }
         
 
-        /* Ricezione del comando dal client utilizzando MSG_PEEK per non consumare i dati */
+        /* Ricezione del comando dal client utilizzando MSG_PEEK per non consumare i dati 
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
@@ -779,7 +803,7 @@ void *handle_client(void *arg) {
         }
 
 
-        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti */
+        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti 
         if (memcmp(&client_address_recived, &client_address, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // rilascio il mutex in modo che il messaggio venga consumato da un altro thread
 
@@ -788,7 +812,7 @@ void *handle_client(void *arg) {
         }
 
 
-        /* Consumazione effettiva dei dati dalla socket */
+        /* Consumazione effettiva dei dati dalla socket 
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address_recived, &addr_len);
         if (bytes_received < 0) {
             printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));

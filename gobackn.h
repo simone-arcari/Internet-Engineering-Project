@@ -25,11 +25,11 @@
 
 #define WINDOW_SIZE 4       // la dovrò fare variabile nel tempo
 #define DATA_SIZE 8
-#define TIMEOUT_SECONDS 100
+#define TIMEOUT_ACKS 1
+#define TIMEOUT_RCV 5
+#define MAX_TIMEOUT_FAIL 15
 #define ACK 0b10101011
-#define IS_LAST_PCK 0b00111111
-#define NOT_LAST_PCK 0b00000000
-#define NOT_DEFINE 0b00000000;
+#define PROBABILITY 0
 
 
 
@@ -56,6 +56,7 @@ typedef struct {
 typedef struct {
     int sequence_number;
     time_t start_time;
+    int num_timeout_fail;
 } Timer;
 
 
@@ -70,7 +71,10 @@ typedef struct {
     int *sender_base;
     int *last_packet_acked;
     int *last_packet;
+
     Timer *timers;
+    bool *max_timeout_flag;
+
     pthread_mutex_t *mutex;
 } Thread_data;
 
@@ -81,11 +85,13 @@ bool verify_checksum(Packet packet);
 bool verify_ack_checksum(Ack ack);
 void *send_packets(void *arg);
 void *receive_acks(void *arg);
+void *timeout_acks(void *arg);
 int get_last(bool received_packet[256]);
 bool check_end_transmission(bool received_packet[256], int last_pck);
-void assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer);
-void send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr);
-void rcv_msg(int socket, void *buf, struct sockaddr *addr, socklen_t *addr_len_ptr);
+ssize_t assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer);
+int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr);
+ssize_t rcv_msg(int socket, void *buf, struct sockaddr *addr, socklen_t *addr_len_ptr);
+void *timeout_rcv_msg(void *arg);
 
 
 #endif  /* GOBACKN_H_ */
