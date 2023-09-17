@@ -179,7 +179,7 @@ void *send_packets(void *arg) {
             // Dopo l'invio del primo pacchetto avviamo il thread per la ricezione degli ack e per i timeout
             if (packet.sequence_number == 0) {
                 pthread_create(&receive_thread, NULL, receive_acks, args);
-                //pthread_create(&timeout_thread, NULL, timeout_acks, args);
+                pthread_create(&timeout_thread, NULL, timeout_acks, args);
             }
 
 
@@ -200,7 +200,7 @@ void *send_packets(void *arg) {
             mutex_unlock(mutex);
     
             // Aspetta la loro effettiva terminazione
-            //pthread_join(timeout_thread, NULL);
+            pthread_join(timeout_thread, NULL);
             pthread_join(receive_thread, NULL);
 
             pthread_exit((void*)EXIT_ERROR);
@@ -211,7 +211,7 @@ void *send_packets(void *arg) {
         if (*(args->last_packet_acked) == *(args->last_packet)) {
             mutex_unlock(mutex);
             pthread_join(receive_thread, NULL);
-            //pthread_join(timeout_thread, NULL);
+            pthread_join(timeout_thread, NULL);
 
             pthread_exit((void*)EXIT_SUCCESS);
         }
