@@ -90,7 +90,7 @@ int get_last(bool received_packet[256]);
 bool check_end_transmission(bool received_packet[256], int last_pck);
 ssize_t assembly_msg(Packet receiver_buffer[256], int last_pck, void *buffer);
 int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr);
-ssize_t rcv_msg(int socket, void *buf, struct sockaddr *addr, socklen_t *addr_len_ptr);
+ssize_t rcv_msg(int socket, void *buf, struct sockaddr *addr);
 void *timeout_rcv_msg(void *arg);
 
 

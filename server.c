@@ -150,8 +150,6 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
     /* Ciclo infinito / Corpo principale del server */
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
-        addr_len = sizeof(client_address);
-
 
         /* Blocco il mutex prima di leggere dalla socket */
         if (mutex_lock(&mutex_rcv) < 0) {
@@ -160,7 +158,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
             exit(EXIT_FAILURE);
         }
-        
+      
 
         /* Ricezione del comando(di connessione) dal client utilizzando MSG_PEEK per non consumare i dati */
         bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
@@ -176,7 +174,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
         buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
 
 
-        /* Verifico che il client sia o no nella lista dei client connessi */
+        /* Verifico che il client sia già nella lista dei client connessi */
         check_list = is_in_list(client_list, client_address);
 
 
@@ -187,6 +185,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
         /* Verifico che il messaggio sia per un thread */
         if (check_connect_msg == false && check_list == true) {
             mutex_unlock(&mutex_rcv);
+
 
 
             continue;   // se non è una richiesta per il main thread ignoro il messaggio
@@ -237,13 +236,12 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
                 remove_node(client_list, pos_client);
                 n_clt--;
                 n_clt <= 30 ? print_list(client_list):0;
+
                 mutex_unlock(&mutex_rcv);
 
 
                 continue;   // in caso di errore non terminiamo ma continiamo con il ciclo successivo
             }
-mutex_unlock(&mutex_rcv);
-while(true){}
 
 
         } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */

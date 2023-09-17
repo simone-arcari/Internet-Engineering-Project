@@ -39,19 +39,6 @@ extern list_t client_list;                     // lista client correntemetne con
 extern node_t *pos_client;                     // ultimo client correntemente connesso
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* 
     Verifica che la cartella sia presente in caso contrario la creo
 */
@@ -137,32 +124,12 @@ int thread_start(int server_socket, struct sockaddr_in client_address, node_t *p
 */
 int accept_client(int server_socket, struct sockaddr_in client_address) {
     char buffer[MAX_BUFFER_SIZE];
-//    struct sockaddr_in client_address_expected;
-    socklen_t addr_len;
     ssize_t bytes_received;
-//    time_t start_time;
-//    time_t current_time;
-//    time_t elapsed_time;
-//    time_t max_duration = 15;               // durata massima in secondi del timer
-
-
-    addr_len = sizeof(client_address);
-//    client_address_expected = client_address;
-
-
-    /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
- //   if (mutex_lock(&mutex_snd) < 0) {
- //       printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
- //       return EXIT_ERROR;
- //   }
 
 
     /* Invio conferma della connessione */
     memset(buffer, 0, MAX_BUFFER_SIZE);
     snprintf(buffer, MAX_BUFFER_SIZE, "connected");
-    //mutex_unlock(&mutex_rcv);
     if (send_msg(server_socket, buffer, strlen(buffer), (struct sockaddr *)&client_address) < 0) {
         printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
 
@@ -171,84 +138,9 @@ int accept_client(int server_socket, struct sockaddr_in client_address) {
     }
 
 
- //   if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
- //       printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
- //       mutex_unlock(&mutex_snd);
-
-
- //       return EXIT_ERROR;
-  //  }
-
-
-//    mutex_unlock(&mutex_snd);
-//    start_time = time(NULL);     // tempo di inizio del timer
-
-/*
-    while (1) {
-        memset(buffer, 0, MAX_BUFFER_SIZE);
-
-
-        /* Blocco per implementare una logica di sincronizzazione sicura tra i threads 
-        if (mutex_lock(&mutex_rcv) < 0) {
-            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-            return EXIT_ERROR;
-        }
-
-
-        /* Calcolo il tempo trascorso 
-        current_time = time(NULL);
-        elapsed_time = current_time - start_time;
-
-
-        /* Esco dal ciclo se sono passati più di 15 secondi 
-        if (elapsed_time >= max_duration) {
-            printf("CONNESSIONE NON RIUSCITA, TIMER SCADUTO\n");
-
-
-            break;
-        }
-
-
-        /* Ricezione messaggio di ACK per connessione a tre vie senza consumare i dati 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex_rcv);
-
-
-            return EXIT_ERROR;
-        }
-
-
-        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti 
-        if (memcmp(&client_address, &client_address_expected, addr_len) != 0) {
-            mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
-
-
-            continue; // in caso non corrispondano ignoro il messaggio e ritento fino allo scadere del timer
-        }
-
-
-        /* Consumazione effettiva dei dati dalla socket 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex_rcv);
-
-
-            return EXIT_ERROR;
-        }
-
-
-        buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
-        break; // se sono arrivato qui esco dal ciclo
-    }
-*/
-
+    /* Ricezione risposta del server */
     memset(buffer, 0, MAX_BUFFER_SIZE);
-    bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address, &addr_len);
+    bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address);
     if (bytes_received < 0) {
         printf("Errore[%d] rcv_msg(): %s\n", errno, strerror(errno));
         printf("CLIENT NON CONNESSO\n");
@@ -265,15 +157,10 @@ int accept_client(int server_socket, struct sockaddr_in client_address) {
 
     } else {
         printf("CLIENT NON CONNESSO\n");
-        mutex_unlock(&mutex_rcv); 
 
 
         return EXIT_ERROR;
     }
-
-
-    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
-    //mutex_unlock(&mutex_rcv); 
 
 
     return EXIT_SUCCESS;
@@ -295,18 +182,17 @@ int close_connection(int server_socket, struct sockaddr_in client_address) {
 
 
     /* Blocco per implementare una logica di sincronizzazione sicura tra i threads */
-//    if (mutex_lock(&mutex_snd) < 0) {
- //       printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+    if (mutex_lock(&mutex_snd) < 0) {
+        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
- //       return EXIT_ERROR;
- //   }
+        return EXIT_ERROR;
+    }
 
 
     /* Invio messaggio di fine connessione */
     memset(buffer, 0, MAX_BUFFER_SIZE);
     snprintf(buffer, MAX_BUFFER_SIZE, "close");
-    //mutex_unlock(&mutex_rcv);
     if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, addr_len) < 0) {
         printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
         mutex_unlock(&mutex_snd);
@@ -315,7 +201,7 @@ int close_connection(int server_socket, struct sockaddr_in client_address) {
         return EXIT_ERROR;
     }
 
- //   mutex_unlock(&mutex_snd);
+    mutex_unlock(&mutex_snd);
 
 
     return EXIT_SUCCESS;
@@ -400,31 +286,10 @@ int send_file_list(int server_socket, struct sockaddr_in client_address) {
     }
 
 
-    /* Blocco per implementare una logica di sincronizzazione sicura tra i threads 
-    if (mutex_lock(&mutex_snd) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-        return EXIT_ERROR;
-    }
-
-
-    /* Invio della lista al client
-    if (sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
-        printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
-        mutex_unlock(&mutex_snd);
-
-
-        return EXIT_ERROR;
-    }
-    */
-
-
     printf("\n%s%sLista file inviata al client:%s\n", BOLDBLACK, BG_MAGENTA, RESET);
     printf("%s%s%s\n", YELLOW, buffer, RESET);
 
 
-    //mutex_unlock(&mutex_snd);
     closedir(directory);
     free(buffer);
 
@@ -448,27 +313,14 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     char full_path[MAX_BUFFER_SIZE];
 
 
-    /* Blocco per implementare una logica di sincronizzazione sicura tra i threads 
-    if (mutex_lock(&mutex_snd) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-        return EXIT_ERROR;
-    }    
-*/
-
     /* Verifico l'esistenza della cartella */
     directory = check_directory(PATH_FILE_FOLDER);
     if (directory == NULL) {
         printf("Errore[%d] check_directory(): %s\n", errno , strerror(errno));
-        //mutex_unlock(&mutex_snd);
 
        
         return EXIT_ERROR;
     }
-
-
-    /*  */
 
 
     /* Compongo il percorso completo del file */
@@ -491,7 +343,6 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
             return EXIT_ERROR;
         } else {
 
-            //mutex_unlock(&mutex_snd);
             return EXIT_ERROR;
         }
     }
@@ -544,14 +395,6 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     /* Invio dei pacchetti del file al client */
     while ((bytes_read = fread(buffer, 1, buffer_size, file)) > 0) {
         
-/*        if (sendto(server_socket, buffer, bytes_read, 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
-            printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
-            mutex_unlock(&mutex_snd);
-
-
-            return EXIT_ERROR;
-        }
-*/
         printf("%s<--- INIZIO INVIO FRAMMENTO --->%s\n", BLUE, RESET);
         if (send_msg(server_socket, buffer, bytes_read, (struct sockaddr *)&client_address) < 0) {
             printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
@@ -564,15 +407,7 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     }
 
 
-    /* Invio di un pacchetto vuoto come segnale di completamento */
-/*    if (sendto(server_socket, NULL, 0, 0, (struct sockaddr *)&client_address, sizeof(client_address)) < 0) {
-        printf("Errore[%d] sendto(): %s\n", errno, strerror(errno));
-        mutex_unlock(&mutex_snd);
-
-
-        return EXIT_ERROR;
-    }
-*/   
+    /* Invio di un frammento vuoto come segnale di completamento */
     printf("%s<--- INIZIO INVIO FRAMMENTO VUOTO --->%s\n", GREEN, RESET);
     if (send_msg(server_socket, NULL, 0, (struct sockaddr *)&client_address) < 0) {
         printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
@@ -586,7 +421,6 @@ int send_file(int server_socket, struct sockaddr_in client_address, char* filena
     free(buffer);
     fclose(file);
     closedir(directory);
-    //mutex_unlock(&mutex_snd);
     printf("FILE INVIATO CON SUCCESSO\n");
 
 
@@ -633,10 +467,10 @@ int receive_file(int socket,  struct sockaddr_in address, char* filename) {
 
 
     while (1) {
-        printf("%s<--- INIZIO RICEZIONE FRAMMENTO --->%s\n", BLUE, RESET);
+        printf("%s<--- INIZIO RICEZIONE FRAMMENTO[%d] --->%s\n", BLUE, num_frammenti, RESET);
         
         memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
-        bytes_received = rcv_msg(socket, buffer, (struct sockaddr *)&address, NULL);
+        bytes_received = rcv_msg(socket, buffer, (struct sockaddr *)&address);
         if (bytes_received < 0) {
             printf("Errore rcv_msg(): %s\n", strerror(errno));
 
@@ -644,9 +478,9 @@ int receive_file(int socket,  struct sockaddr_in address, char* filename) {
             return EXIT_ERROR;
         }
 
-        num_frammenti++;
         printf("bytes_received: %d\n", bytes_received);
         printf("%s<--- FINE RICEZIONE FRAMMENTO[%d] --->%s\n", BLUE, num_frammenti, RESET);
+        num_frammenti++;
 
         /* Ricezione completata */
         if (bytes_received == 0) {
@@ -673,149 +507,13 @@ int receive_file(int socket,  struct sockaddr_in address, char* filename) {
 }
 
 
-
-
-int DA_ELIMINARE(int server_socket, struct sockaddr_in client_address, char* filename) {
-    socklen_t addr_len;
-    ssize_t bytes_received;
-    char buffer[MAX_BUFFER_FILE_SIZE];
-    char full_path[MAX_BUFFER_SIZE];
-    FILE *file;
-    DIR *directory;
-    struct sockaddr_in client_address_expected = client_address;
-
-
-    /* Blocco per implementare una logica thread safe 
-    if (mutex_lock(&mutex_rcv) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        mutex_unlock(&mutex_rcv); 
-
-
-        return EXIT_ERROR;
-    }
-*/
-
-    /* Verifico l'esistenza della cartella */
-    directory = check_directory(PATH_FILE_FOLDER);
-    if (directory == NULL) {
-        printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
-         mutex_unlock(&mutex_rcv); 
-
-       
-        return EXIT_ERROR;
-    }
-
-
-    /* Compongo il percorso completo del file */
-    memset(full_path, 0, MAX_BUFFER_SIZE);
-    snprintf(full_path, sizeof(full_path), "%s/%s", PATH_FILE_FOLDER, filename);
-
-
-    /* Apertura del file in modalità scrittura binaria */
-    file = fopen(full_path, "wb");
-    if (file == NULL) {
-        printf("Errore fopen(): %s\n", strerror(errno));
-        mutex_unlock(&mutex_rcv); 
-
-
-        return EXIT_ERROR;
-    }
-
-
-    /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
-    //mutex_unlock(&mutex_rcv); 
-
-
-    while (1) {
-
-        /* Ricezione frammento file */
-        memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
-        bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] rcv_msg(): %s\n", errno, strerror(errno));
-
-
-            return EXIT_ERROR;
-        }
-
-
-
-        /* Blocco per implementare una logica thread safe 
-        if (mutex_lock(&mutex_rcv) < 0) {
-            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-        
-
-            return EXIT_ERROR;
-        }
- 
-
-
-        /* Ricezione messaggio senza consumare i dati 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-
-
-            return EXIT_ERROR;
-        }
-
-
-        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti 
-        if (memcmp(&client_address, &client_address_expected, addr_len) != 0) {
-            mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
-
-
-            continue; // in caso non corrispondano ignoro il messaggio e riprovo
-        }
-
-
-        /* Consumazione effettiva dei dati dalla socket 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-
-
-            return EXIT_ERROR;
-        }
-*/
-
-        /* Ricezione completata */
-        if (bytes_received == 0) {
-
-
-            break;
-        }
-
-
-        /* Scrivo i dati ricevuti nel file */
-        fwrite(buffer, 1, bytes_received, file);
-
-
-        /* Sblocco per implementare una logica di sincronizzazione sicura tra i threads */
-        mutex_unlock(&mutex_rcv);
-    }
-
-
-    fclose(file);   // Chiudo il file
-    closedir(directory);
-    printf("FILE RICEVUTO CON SUCCESSO\n");
-    mutex_unlock(&mutex_rcv);
-
-
-    return EXIT_SUCCESS;
-}
-
-
-
-
-
-
 /*
     Implementa la chiamta di sincronizzazione sicura tra i threads a pthread_mutex_lock()
 */
 int mutex_lock(pthread_mutex_t *mutex) {
     int res;
 
+    if(mutex == &mutex_rcv) return 0;
 
     do {
         errno = 0; // azzeramento di errno
@@ -840,7 +538,6 @@ int mutex_lock(pthread_mutex_t *mutex) {
 int mutex_unlock(pthread_mutex_t *mutex) {
     int res;
 
-
     do {
         errno = 0; // azzeramento di errno
         res = pthread_mutex_unlock(mutex);
@@ -862,13 +559,11 @@ int mutex_unlock(pthread_mutex_t *mutex) {
     Implementa il Thread che si occupa di gestire il relativo client
 */
 void *handler_client(void *arg) {
-    socklen_t addr_len;
     ssize_t bytes_received;
     int server_socket;
     char buffer[MAX_BUFFER_SIZE];
     pthread_t tid;
     ClientInfo *client_info;
-    struct sockaddr_in client_address_recived;
     struct sockaddr_in client_address;
     node_t *pos_client;
 
@@ -899,10 +594,8 @@ void *handler_client(void *arg) {
     /* Ciclo infinito / Corpo principale del thread */
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
-        addr_len = sizeof(client_address);
 
-
-        bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address, &addr_len);
+        bytes_received = rcv_msg(server_socket, buffer, (struct sockaddr *)&client_address);
         if (bytes_received < 0) {
             printf("Errore[%d] rcv_msg(): %s\n", errno, strerror(errno));
             close_connection(server_socket, client_address);    // chiudere la connessione
@@ -913,71 +606,12 @@ void *handler_client(void *arg) {
 
 
 
-
-
-        /* Blocco il mutex prima di leggere dalla socket 
-        if (mutex_lock(&mutex_rcv) < 0) {
-            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
-            
-
-            close_connection(server_socket, client_address);    // chiudere la connessione + messaggio errore
-            free(client_info);
-
-
-            thread_kill(tid, pos_client);
-        }
-        
-
-        /* Ricezione del comando dal client utilizzando MSG_PEEK per non consumare i dati 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, (struct sockaddr *)&client_address_recived, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-            
-            
-            close_connection(server_socket, client_address);    // chiudere la connessione + messaggio errore
-            mutex_unlock(&mutex_rcv);
-            free(client_info);
-
-
-           thread_kill(tid, pos_client);
-        }
-
-
-        /* Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti 
-        if (memcmp(&client_address_recived, &client_address, addr_len) != 0) {
-            mutex_unlock(&mutex_rcv); // rilascio il mutex in modo che il messaggio venga consumato da un altro thread
-
-
-            continue; // in caso non corrispondano ignoro il messaggio
-        }
-
-
-        /* Consumazione effettiva dei dati dalla socket 
-        bytes_received = recvfrom(server_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_address_recived, &addr_len);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-
-            close_connection(server_socket, client_address);    // chiudere la connessione + messaggio errore
-            mutex_unlock(&mutex_rcv);
-            free(client_info);
-
-
-            thread_kill(tid, pos_client);
-        }
-
-
-        buffer[bytes_received] = '\0';  // imposto il terminatore di stringa
-
-
         /* Stampa messaggi ricevuti */
         printf("%sthread[%ld]%s: dati da ", BOLDGREEN, tid, RESET);
         printf("%s%s%s:", CYAN, inet_ntoa(client_address.sin_addr), RESET);
         printf("%sUDP%u%s : ", MAGENTA, ntohs(client_address.sin_port), RESET);
         printf("%s%s%s\n", BOLDYELLOW, buffer, RESET);    
         
-
-        /* Sblocco il mutex dopo aver letto dalla socket */
-        //mutex_unlock(&mutex_rcv);   
 
 
         /* Gestore dei comandi */

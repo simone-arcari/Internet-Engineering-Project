@@ -84,6 +84,7 @@ bool verify_ack_checksum(Ack ack) {
 
 // Funzione per inviare pacchetti
 void *send_packets(void *arg) {
+
     Thread_data *args = (Thread_data*)arg;
     pthread_mutex_t *mutex = args->mutex;
     pthread_t receive_thread, timeout_thread;
@@ -178,7 +179,7 @@ void *send_packets(void *arg) {
             // Dopo l'invio del primo pacchetto avviamo il thread per la ricezione degli ack e per i timeout
             if (packet.sequence_number == 0) {
                 pthread_create(&receive_thread, NULL, receive_acks, args);
-                pthread_create(&timeout_thread, NULL, timeout_acks, args);
+                //pthread_create(&timeout_thread, NULL, timeout_acks, args);
             }
 
 
@@ -196,17 +197,12 @@ void *send_packets(void *arg) {
 
         // Se avvengono troppi timeout per uno stesso pacchetto
         if (*(args->max_timeout_flag) == true) {
-
-            // Termina i thread figli
-            pthread_cancel(receive_thread);
-            pthread_cancel(timeout_thread);
-
-            
+            mutex_unlock(mutex);
+    
             // Aspetta la loro effettiva terminazione
-            pthread_join(timeout_thread, NULL);
+            //pthread_join(timeout_thread, NULL);
             pthread_join(receive_thread, NULL);
 
-            
             pthread_exit((void*)EXIT_ERROR);
         }
 
@@ -215,7 +211,7 @@ void *send_packets(void *arg) {
         if (*(args->last_packet_acked) == *(args->last_packet)) {
             mutex_unlock(mutex);
             pthread_join(receive_thread, NULL);
-            pthread_join(timeout_thread, NULL);
+            //pthread_join(timeout_thread, NULL);
 
             pthread_exit((void*)EXIT_SUCCESS);
         }
@@ -234,14 +230,10 @@ void *receive_acks(void *arg) {
     pthread_mutex_t *mutex = args->mutex;
 
     int socket = args->socket;
-    Packet packet;
     struct sockaddr addr_recived;
-    struct sockaddr *addr = args->addr;
     socklen_t addr_len;
 
     Ack received_ack;
-    time_t current_time;
-    int sequence_number_to_retransmit;
 
     bool boolean_variable;
     double random_value;
@@ -258,9 +250,9 @@ void *receive_acks(void *arg) {
 #ifdef SERVER
         mutex_lock(&mutex_rcv);
         recvfrom(socket, &received_ack, sizeof(received_ack), MSG_PEEK, (struct sockaddr *)&addr_recived, &addr_len); // non sto consumando i dati
-
+        
         // Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti
-        if (memcmp(addr, &addr_recived, addr_len) != 0) {
+        if (memcmp(args->addr, &addr_recived, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
             mutex_unlock(mutex);
 
@@ -270,7 +262,7 @@ void *receive_acks(void *arg) {
         recvfrom(socket, &received_ack, sizeof(received_ack), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
 #else
-        recvfrom(socket, &received_ack, sizeof(received_ack), 0, NULL, NULL);
+        recvfrom(socket, &received_ack, sizeof(received_ack), 0, (struct sockaddr *)&addr_recived, &addr_len);
 #endif
         // Fine ricezione Ack
 
@@ -323,22 +315,26 @@ void *receive_acks(void *arg) {
             return NULL;
         }
 
+        if (*(args->max_timeout_flag) == true) {
+            mutex_unlock(mutex);
+            
+            return NULL;
+        }
+
         mutex_unlock(mutex);
 
     }
 }
 
 void *timeout_acks(void *arg) {
+
     Thread_data *args = (Thread_data*)arg;
     pthread_mutex_t *mutex = args->mutex;
 
     int socket = args->socket;
     Packet packet;
-    struct sockaddr addr_recived;
     struct sockaddr *addr = args->addr;
-    socklen_t addr_len;
 
-    Ack received_ack;
     time_t current_time;
     int sequence_number_to_retransmit;
 
@@ -380,7 +376,6 @@ void *timeout_acks(void *arg) {
 
                         return NULL;
                     }
-
                 }
             }
         }
@@ -505,7 +500,7 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
     }
 
     // Libera risorse
-    pthread_mutex_destroy(&mutex);
+    //pthread_mutex_destroy(&mutex);
 
     return exit_status;
 }
@@ -518,7 +513,7 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
     possibili può portare DATA_SIZE byte, ergo max_byte = 256*DATA_SIZE, in caso di dimesioni superiori sarà compito
     del livello applicativo gestire la segmetazione dei messaggi per il mittente e il riassemblaggio per il destinatario
 */
-ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr_len_ptr) {
+ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
     Packet packet;
     Ack ack;
 
@@ -558,27 +553,26 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr
 
         if (elapsed_time >= TIMEOUT_RCV) {
 
-            return EXIT_ERROR;
+            //return EXIT_ERROR;
         }
         
 
         // Ricezione Pacchetto
 #ifdef SERVER
         mutex_lock(&mutex_rcv);
-        recvfrom(socket, &packet, sizeof(packet), MSG_PEEK, (struct sockaddr *)&addr_recived, addr_len_ptr); // non sto consumando i dati
-        addr_len = *addr_len_ptr;
+        recvfrom(socket, &packet, sizeof(packet), MSG_PEEK, (struct sockaddr *)&addr_recived, &addr_len); // non sto consumando i dati
 
         // Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti
         if (memcmp(addr, &addr_recived, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
 
+
             continue; // in caso non corrispondano ignoro il messaggio e ritento fino allo scadere del timer
         }
-
-        recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)&addr_recived, addr_len_ptr); // ho consumato i dati
+        recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
         mutex_unlock(&mutex_rcv);
 #else
-        recvfrom(socket, &packet, sizeof(packet), 0, NULL, NULL); // ho consumato i dati
+        recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)&addr_recived, &addr_len); // ho consumato i dati
 #endif
         // Fine ricezione pacchetto
 
@@ -630,6 +624,10 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr, socklen_t *addr
 
         } else {
             // La checksum del pacchetto non corrisponde, ignora il pacchetto (il mittente lo ritrasmetterà allo scadere del timer)
+
+            if (p > 0) {
+                printf("%spacchetto perso: %d%s\n", RED, packet.sequence_number, RESET);
+            }
 
         }
 

@@ -187,7 +187,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
     printf("TENTATIVO DI CONNESSIONE\n");
 
 
-    /* Invio del comando al server */
+    /* Invio del comando al server con comunicazione non affidabile */
     sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_address, sizeof(server_address));
 
 
@@ -196,7 +196,7 @@ int connect_server(int client_socket, struct sockaddr_in server_address) {
 
 
     memset(buffer, 0, MAX_BUFFER_SIZE);
-    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address);
     if (bytes_received < 0) {
         printf("Errore rcv_msg(): %s\n", strerror(errno));
 
@@ -243,7 +243,7 @@ int receive_file_list(int client_socket) {
 
     /* Ricevo la lista */
     memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
-    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+    bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address);
     if (bytes_received < 0) {
         printf("Errore rcv_msg(): %s\n", strerror(errno));
 
@@ -299,10 +299,10 @@ int download_file(int client_socket, char* filename) {
 
 
     while (1) {
-        printf("%s<--- INIZIO RICEZIONE FRAMMENTO --->%s\n", BLUE, RESET);
+        printf("%s<--- INIZIO RICEZIONE FRAMMENTO[%d] --->%s\n", BLUE, num_frammenti, RESET);
         
         memset(buffer, 0, MAX_BUFFER_FILE_SIZE);
-        bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address, NULL);
+        bytes_received = rcv_msg(client_socket, buffer, (struct sockaddr *)&server_address);
         if (bytes_received < 0) {
             printf("Errore rcv_msg(): %s\n", strerror(errno));
 
@@ -310,9 +310,9 @@ int download_file(int client_socket, char* filename) {
             return EXIT_ERROR;
         }
 
-        num_frammenti++;
         printf("bytes_received: %d\n", bytes_received);
         printf("%s<--- FINE RICEZIONE FRAMMENTO[%d] --->%s\n", BLUE, num_frammenti, RESET);
+        num_frammenti++;
 
         /* Ricezione completata */
         if (bytes_received == 0) {
@@ -350,7 +350,6 @@ int upload_file(int server_socket, struct sockaddr_in client_address, char* file
     long file_size;
     long buffer_size;
     char *buffer;
-    char full_path[MAX_BUFFER_SIZE];
 
 
     /* Verifico l'esistenza della cartella */
@@ -460,19 +459,19 @@ int upload_file(int server_socket, struct sockaddr_in client_address, char* file
 
 void *receive_thread(void __attribute__((unused)) *arg) {
     char buffer[MAX_BUFFER_SIZE];
-    int bytes_received;
+    int bytes_received = 0;
 
 
     while (1) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
         /* Verifico se dispongo del permesso per proseguire */
-        if (mutex_lock(&mutex) < 0) {
-            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        //if (mutex_lock(&mutex) < 0) {
+     //      printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
-            exit(EXIT_FAILURE);
-        }
+    //        exit(EXIT_FAILURE);
+     //   }
 
         
         /* Ricezione messaggi senza consumare i dati */
@@ -498,7 +497,6 @@ void *receive_thread(void __attribute__((unused)) *arg) {
     }
     
 
-    return NULL;
 }
 
 
@@ -561,7 +559,7 @@ void client_setup() {
         printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
         
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -570,7 +568,7 @@ void client_setup() {
         printf("Errore[%d] sigaction(): %s\n", errno , strerror(errno));
         
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -579,7 +577,7 @@ void client_setup() {
         printf("Errore[%d] pthread_mutex_init(): %s\n", errno , strerror(errno));
 
        
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -588,7 +586,7 @@ void client_setup() {
         printf("Errore[%d] check_directory(): %s\n",errno , strerror(errno));
 
        
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -598,7 +596,7 @@ void client_setup() {
         printf("Errore socket(): %s\n", strerror(errno)); 
 
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -609,7 +607,7 @@ void client_setup() {
         printf("Errore inet_pton(): %s\n", strerror(errno)); 
 
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -618,7 +616,7 @@ void client_setup() {
         printf("Errore connect_server(): %s\n", strerror(errno)); 
 
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
 
@@ -636,7 +634,7 @@ void client_setup() {
         printf("Errore pthread_create(): %s\n", strerror(errno)); 
 
 
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 }
 
