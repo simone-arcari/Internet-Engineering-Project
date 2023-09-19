@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS_server = -Wall -Wextra -lpthread 
+CFLAGS_server = -Wall -Wextra -lpthread -DSERVER
 CFLAGS_client = -Wall -Wextra -lpthread
 SRCS_server = server.c double_linked_list_opt.c function.c transport_protocol.c
 SRCS_client = client.c transport_protocol.c

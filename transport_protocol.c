@@ -336,7 +336,7 @@ void *receive_acks(void *arg) {
         // Verifico se l'indirizzo IP e la porta del mittente non corrispondono a quelli previsti
         if (memcmp(args->addr, &addr_recived, addr_len) != 0) {
             mutex_unlock(&mutex_rcv); // in questo modo il vero destinatario ha la possibilità di consumare i dati
-            mutex_unlock(mutex);
+            
 
             continue; // in caso non corrispondano ignoro il messaggio e ritento fino allo scadere del timer
         }
