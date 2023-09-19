@@ -9,8 +9,8 @@
  */
 
 
-#ifndef GOBACKN_H_
-#define GOBACKN_H_
+#ifndef TRANSPORT_PROTOCOL_H_
+#define TRANSPORT_PROTOCOL_H_
 
 
 #include <time.h>
@@ -70,7 +70,7 @@ typedef struct {
     Packet *sender_buffer;
     int *sender_base;
     int *last_packet_acked;
-    int *last_packet;
+    int last_packet;
 
     Timer *timers;
     bool *max_timeout_flag;
@@ -83,7 +83,6 @@ u_int8_t calculate_checksum(Packet packet);
 u_int8_t calculate_ack_checksum(Ack ack);
 bool verify_checksum(Packet packet);
 bool verify_ack_checksum(Ack ack);
-void *send_packets(void *arg);
 void *receive_acks(void *arg);
 void *timeout_acks(void *arg);
 int get_last(bool received_packet[256]);

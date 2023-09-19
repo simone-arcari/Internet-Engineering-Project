@@ -15,6 +15,7 @@
 #include <signal.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -22,7 +23,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "gobackn.h"
+#include "transport_protocol.h"
 
 
 
@@ -84,7 +85,7 @@
 
 int client_socket;
 struct sockaddr_in server_address;
-pthread_mutex_t mutex;
+pthread_mutex_t mutex;  // Serve a gestire i tentativi di lettura per il thread reiceved_thread
 
 struct sigaction sa1;
 struct sigaction sa2;
@@ -442,6 +443,7 @@ int upload_file(int server_socket, struct sockaddr_in client_address, char* file
     printf("%s<--- INIZIO INVIO FRAMMENTO VUOTO --->%s\n", GREEN, RESET);
     if (send_msg(server_socket, NULL, 0, (struct sockaddr *)&client_address) < 0) {
         printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
+        
         return EXIT_ERROR;
     }
     printf("%s<--- FINE INVIO FRAMMENTO VUOTO --->%s\n", GREEN, RESET);
@@ -466,37 +468,53 @@ void *receive_thread(void __attribute__((unused)) *arg) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
 
         /* Verifico se dispongo del permesso per proseguire */
-        //if (mutex_lock(&mutex) < 0) {
-     //      printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        if (mutex_lock(&mutex) < 0) {
+           printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
-
-    //        exit(EXIT_FAILURE);
-     //   }
-
-        
-        /* Ricezione messaggi senza consumare i dati */
-        bytes_received = recvfrom(client_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, NULL, NULL);
-        if (bytes_received < 0) {
-            printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));
-
 
             exit(EXIT_FAILURE);
         }
 
 
+        // Salva lo stato originale del socket.
+        int original_flags = fcntl(client_socket, F_GETFL, 0);
+
+        // Imposta il socket in modalità non bloccante solo per una chiamata.
+        int temp_flags = original_flags | O_NONBLOCK;
+        fcntl(client_socket, F_SETFL, temp_flags);
+
+        
+        /* Ricezione messaggi senza consumare i dati */
+        bytes_received = recvfrom(client_socket, buffer, MAX_BUFFER_SIZE, MSG_PEEK, NULL, NULL);
+        if (bytes_received < 0) {
+            
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // Nessun dato disponibile al momento.
+            
+            } else {
+                printf("Errore[%d] recvfrom(): %s\n", errno, strerror(errno));  
+
+                exit(EXIT_FAILURE);
+            }
+        }
+
         buffer[bytes_received] = '\0';
+
+        // Ripristina lo stato originale del socket (modalità bloccante).
+        fcntl(client_socket, F_SETFL, original_flags);
 
 
         /* Controllo se il messaggio è un comando di terminazione */
         if (strcmp(buffer, "close") == 0) {
             printf("\n\b\b%sSegnale chiusura connessione da parte del server. %sExiting...%s\n", BOLDGREEN, BOLDYELLOW, RESET);
+            mutex_unlock(&mutex);
             
                     
             exit(EXIT_SUCCESS);
         }
-    }
-    
 
+        mutex_unlock(&mutex);
+    }
 }
 
 
@@ -621,12 +639,12 @@ void client_setup() {
 
 
     /* Blocco il mutex prima di avviare il thread per la ricezione del segnale di fine connessione */
-    if (mutex_lock(&mutex) < 0) {
-        printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+ //   if (mutex_lock(&mutex) < 0) {
+ //       printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
         
 
-        exit(EXIT_FAILURE);
-    }
+  //      exit(EXIT_FAILURE);
+ //   }
 
 
     /* Creo un thread per la ricezione asincrona di un eventuale messaggio di fine connessione */
@@ -660,7 +678,9 @@ int main(int argc, char *argv[]) {
 
 
     /* Richiesta di input da parte dell'utente */
-    while (true) { 
+    while (true) {
+
+
         printf("%s%s%s: ", BOLDGREEN, argv[0], RESET);
         printf("Inserisci un comando (list, get <nome_file>, put <path/nome_file>): %s", BOLDYELLOW);
         fgets(buffer, MAX_BUFFER_SIZE, stdin);
@@ -669,6 +689,15 @@ int main(int argc, char *argv[]) {
 
 JUMP:
 
+        /* Blocco il mutex */
+        if (mutex_lock(&mutex) < 0) {
+            printf("Errore[%d] mutex_lock(): %s\n", errno, strerror(errno));
+        
+
+            exit(EXIT_FAILURE);
+        }
+
+
         /* Invio del comando al server */
         if (send_msg(client_socket, buffer, strlen(buffer), (struct sockaddr *)&server_address) < 0) {
             printf("Errore[%d] send_msg(): %s\n", errno, strerror(errno));
@@ -676,7 +705,7 @@ JUMP:
 
             exit(EXIT_FAILURE);
         }
-        
+
 
         /* Gestore del comando inviato */
         if (strcmp(buffer, "list") == 0) {               /* Richiesta della lista dei file disponibili al server*/

@@ -34,7 +34,7 @@
 #include <netinet/in.h>
 #include "double_linked_list_opt.h"
 #include "function.h"
-#include "gobackn.h"
+#include "transport_protocol.h"
 
 
 #define DEFAULT_PORT 8888
@@ -242,6 +242,7 @@ int main(int __attribute__((unused)) argc, char *argv[]) {
 
                 continue;   // in caso di errore non terminiamo ma continiamo con il ciclo successivo
             }
+            while(1);
 
 
         } else if (check_connect_msg == true && check_list == true) {   /* Caso 2: è una connect ma è già in lista */

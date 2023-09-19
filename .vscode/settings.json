@@ -29,6 +29,7 @@
         "double_linked_list_opt.h": "c",
         "gobackn.h": "c",
         "function.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "transport_protocol.h": "c"
     }
 }

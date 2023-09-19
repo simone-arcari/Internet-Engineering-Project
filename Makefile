@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS_server = -Wall -Wextra -lpthread -DSERVER
+CFLAGS_server = -Wall -Wextra -lpthread 
 CFLAGS_client = -Wall -Wextra -lpthread
-SRCS_server = server.c double_linked_list_opt.c function.c gobackn.c
-SRCS_client = client.c gobackn.c
+SRCS_server = server.c double_linked_list_opt.c function.c transport_protocol.c
+SRCS_client = client.c transport_protocol.c
 
 TARGET = server client
 
