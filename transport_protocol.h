@@ -25,11 +25,11 @@
 
 #define WINDOW_SIZE 4       // la dovrò fare variabile nel tempo
 #define DATA_SIZE 1024
-#define TIMEOUT_ACKS 1
+#define TIMEOUT_ACKS 3
 #define TIMEOUT_RCV 5
 #define MAX_TIMEOUT_FAIL 10
 #define ACK 0b10101011
-#define PROBABILITY 0
+#define PROBABILITY 0.1
 
 
 
@@ -38,7 +38,8 @@
 typedef struct {
     u_int8_t sequence_number;       // inidici tra 0 e 255
     u_int8_t data[DATA_SIZE];       // contenuto del pacchetto
-    size_t data_size;               // numero byte informativi di data[] 
+    size_t data_size;               // numero byte informativi di data[]
+    u_int8_t transmission_code;     // pemette di capire se il pacchetto fa parte dalla trasmissione corrente
     u_int8_t last_pck_flag;         // indica al destinatario se è o no l'ultimo pacchetto 
     u_int8_t checksum;              // Campo per la checksum
 } Packet;
@@ -48,6 +49,7 @@ typedef struct {
 typedef struct {
     u_int8_t sequence_number;       // inidici tra 0 e 255
     u_int8_t ack_code;              // indica che si tratta di un ack
+    u_int8_t transmission_code;     // pemette di capire se l'ack fa parte dalla trasmissione corrente   
     u_int8_t checksum;              // Campo per la checksum
 } Ack;
 
@@ -76,6 +78,8 @@ typedef struct {
     bool *max_timeout_flag;
 
     pthread_mutex_t *mutex;
+
+    u_int8_t trans_code;
 } Thread_data;
 
 

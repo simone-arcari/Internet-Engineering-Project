@@ -57,6 +57,7 @@ u_int8_t calculate_checksum(Packet packet) {
     }
 
     checksum += packet.data_size;
+    checksum += packet.transmission_code;
     checksum += packet.last_pck_flag;
 
     return checksum;
@@ -64,9 +65,12 @@ u_int8_t calculate_checksum(Packet packet) {
 
 // Funzione per calcolare la checksum degli ack
 u_int8_t calculate_ack_checksum(Ack ack) {
-    u_int8_t checksum;
-    
-    checksum = ack.ack_code*(ack.sequence_number+1);
+    u_int8_t checksum = 0;
+
+    checksum += ack.sequence_number;
+    checksum += ack.transmission_code;   
+    checksum += ack.ack_code;   
+
     return checksum;
 }
 
@@ -165,6 +169,8 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
     size_t data_size;                           // dimensione in byte dei dati effettivamente trasmessi dal pachhetto corrente 
     size_t residue_packet_size;
 
+    u_int8_t trans_code;
+
     Timer timers[WINDOW_SIZE];
     bool max_timeout_flag = false;
     
@@ -173,6 +179,9 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
     pthread_mutex_t mutex;
     pthread_t receive_thread, timeout_thread;
 
+
+    srand(time(NULL));
+    trans_code = rand();
 
 
     number_of_full_packets = msg_size/DATA_SIZE;      // calcola il numero di pacchetti che avranno taglia massima ovvero DATA_SIZE
@@ -197,7 +206,7 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
 
     }
 
-    Thread_data args = {socket, buffer, msg_size, addr, sender_buffer, &sender_base, &last_packet_acked, last_packet, timers, &max_timeout_flag, &mutex};
+    Thread_data args = {socket, buffer, msg_size, addr, sender_buffer, &sender_base, &last_packet_acked, last_packet, timers, &max_timeout_flag, &mutex, trans_code};
 
     // Inizializzo il mutex per gestrire l'accesso alle variabili condivise 
     if (pthread_mutex_init(&mutex, NULL) != 0) {
@@ -207,6 +216,7 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
         return EXIT_FAILURE;
     }
 
+    printf("******************\n");
 
     while (true) {
         mutex_lock(&mutex);
@@ -231,7 +241,8 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
             packet.sequence_number = next_sequence_number;                                        // imposta il seq_num del pacchetto
             packet.data_size = data_size;                                                         // imposta la taglia effettiva dei byte utili di data
             memcpy(packet.data, buffer_ptr, data_size);                                           // assegna il campo data
-            packet.last_pck_flag = (next_sequence_number == last_packet) ? true:false;   // indica se questo è lultimo pacchetto della trasmissione
+            packet.transmission_code = trans_code;                                                // questo valore identifica i paccheti della trasmisione corrente
+            packet.last_pck_flag = (next_sequence_number == last_packet) ? true:false;            // indica se questo è lultimo pacchetto della trasmissione
             packet.checksum = calculate_checksum(packet);                                         // Calcola la checksum
 
 
@@ -248,7 +259,7 @@ int send_msg(int socket, void *buffer, size_t msg_size, struct sockaddr *addr) {
 #else
             sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
 #endif
-            printf("inviato pacchetto: %d\n", packet.sequence_number);
+            printf("inviato pacchetto: %d, [%d]\n", packet.sequence_number, packet.transmission_code);
 
 
             // Avvia il timer per il pacchetto appena inviato
@@ -314,6 +325,7 @@ void *receive_acks(void *arg) {
     socklen_t addr_len;
 
     int last_packet = args->last_packet;
+    u_int8_t trans_code = args->trans_code;
 
     Ack received_ack;
 
@@ -357,41 +369,47 @@ void *receive_acks(void *arg) {
         boolean_variable = (random_value > p);
 
 
-        // Verifica la checksum dell'ACK ricevuto
-        if (verify_ack_checksum(received_ack) && boolean_variable) {
-            printf("ricevuto ack: %d\n", received_ack.sequence_number);
+        // Considero solo ack della trasmissione corrente
+        if (received_ack.transmission_code == trans_code) {
 
-            // ACK ricevuto correttamente, aggiornare il base sender e azzerare il timer
-            if (received_ack.sequence_number > *(args->last_packet_acked)) {
+            // Verifica la checksum dell'ACK ricevuto
+            if (verify_ack_checksum(received_ack) && boolean_variable) {
+                printf("ricevuto ack: %d [%d]\n", received_ack.sequence_number, received_ack.transmission_code);
 
-                // Azzera il timer per il pacchetto riscontrato e quelli con seq_num inferiori (Ack Cumulativi)
-                for (int i = 0; i < WINDOW_SIZE; i++) {
-                    if (args->timers[i].sequence_number <= received_ack.sequence_number) {
-                        args->timers[i].sequence_number = -1; // Segna il timer come non attivo
-                        args->timers[i].num_timeout_fail = 0;
+                // ACK ricevuto correttamente, aggiornare il base sender e azzerare il timer
+                if (received_ack.sequence_number > *(args->last_packet_acked)) {
+
+                    // Azzera il timer per il pacchetto riscontrato e quelli con seq_num inferiori (Ack Cumulativi)
+                    for (int i = 0; i < WINDOW_SIZE; i++) {
+                        if (args->timers[i].sequence_number <= received_ack.sequence_number) {
+                            args->timers[i].sequence_number = -1; // Segna il timer come non attivo
+                            args->timers[i].num_timeout_fail = 0;
+
+                        }
+                    }
+
+
+                    *(args->last_packet_acked) = received_ack.sequence_number;
+
+                    // Aggiorna il base sender sempre se la finestra non è arrivata alla fine
+                    if (*(args->last_packet_acked) <= last_packet-WINDOW_SIZE) {
+                        *(args->sender_base) = received_ack.sequence_number + 1;
 
                     }
+                    
                 }
 
+            } else {
+                // La checksum dell'ACK non corrisponde, ignora l'ACK oppure simulazione perdita ack
 
-                *(args->last_packet_acked) = received_ack.sequence_number;
-
-                // Aggiorna il base sender sempre se la finestra non è arrivata alla fine
-                if (*(args->last_packet_acked) <= last_packet-WINDOW_SIZE) {
-                    *(args->sender_base) = received_ack.sequence_number + 1;
-
+                if (p > 0) {
+                    printf("%sack perso: %d [%d]%s\n", RED, received_ack.sequence_number, received_ack.transmission_code, RESET);
                 }
-                
+
             }
-
-        } else {
-            // La checksum dell'ACK non corrisponde, ignora l'ACK oppure simulazione perdita ack
-
-            if (p > 0) {
-                printf("%sack perso: %d%s\n", RED, received_ack.sequence_number, RESET);
-            }
-
         }
+
+        
 
 
         // Se tutti i pacchetti vengono inviati e riscontrati correttamente
@@ -453,7 +471,7 @@ void *timeout_acks(void *arg) {
 #else
                     sendto(socket, &packet, sizeof(packet), 0, addr, sizeof(*addr));
 #endif
-                    printf("rinviato pacchetto: %d\n", packet.sequence_number);
+                    printf("timeout rinviato pacchetto: %d [%d]\n", packet.sequence_number, packet.transmission_code);
 
                     // Avvia il timer per il pacchetto appena rinviato
                     args->timers[packet.sequence_number % WINDOW_SIZE].sequence_number = packet.sequence_number;
@@ -497,7 +515,7 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
     Ack ack;
 
     Packet receiver_buffer[256];
-    bool received_packet_flag[256];
+    bool received_packet_flags[256];
     
     struct sockaddr addr_recived;
     socklen_t addr_len;
@@ -517,11 +535,13 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
 
 
     memset(receiver_buffer, 0, sizeof(receiver_buffer));
-    memset(received_packet_flag, 0, sizeof(received_packet_flag));
+    memset(received_packet_flags, 0, sizeof(received_packet_flags));
 
 
     // Inizializza il generatore di numeri casuali con il tempo attuale come seme
     srand(time(NULL));
+
+    printf("******************\n");
 
 
     while (true) {
@@ -563,7 +583,7 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
 
         // Verifica la checksum del pacchetto ricevuto
         if (verify_checksum(packet) && boolean_variable) {
-            printf("ricevuto pacchetto: %d\n", packet.sequence_number);
+            printf("ricevuto pacchetto: %d [%d]\n", packet.sequence_number, packet.transmission_code);
 
 
             // Reset timer
@@ -576,16 +596,17 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
 
 
             // Da qui si implemeta la funzionalità che permette al mittente di sfruttare gli ack cumulativi
-            received_packet_flag[packet.sequence_number] = true;     // marco la rispettiva entry come ricevuta ed archiviata
-            current = get_last(received_packet_flag);
+            received_packet_flags[packet.sequence_number] = true;     // marco la rispettiva entry come ricevuta ed archiviata
+            current = get_last(received_packet_flags);
 
 
-            if (current > last_packet_acked) {
+            if (current >= last_packet_acked) {
                 last_packet_acked = current;
 
                 
                 // crea il pacchetto di ack
                 ack.sequence_number = current;
+                ack.transmission_code = receiver_buffer[current].transmission_code;
                 ack.ack_code = ACK;
                 ack.checksum = calculate_ack_checksum(ack);
 
@@ -597,7 +618,7 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
 #else
                 sendto(socket, &ack, sizeof(ack), 0, addr, sizeof(*addr));
 #endif
-                printf("inviato ack: %d\n", ack.sequence_number);
+                printf("inviato ack: %d [%d]\n", ack.sequence_number, ack.transmission_code);
 
             }
 
@@ -605,14 +626,14 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
             // La checksum del pacchetto non corrisponde, ignora il pacchetto (il mittente lo ritrasmetterà allo scadere del timer)
 
             if (p > 0) {
-                printf("%spacchetto perso: %d%s\n", RED, packet.sequence_number, RESET);
+                printf("%spacchetto perso: %d [%d]%s\n", RED, packet.sequence_number, packet.transmission_code, RESET);
             }
 
         }
 
 
         // Verifica che tutti i pacchetti siano stati ricevuti
-        if (check_end_transmission(received_packet_flag, last_packet)) {
+        if (check_end_transmission(received_packet_flags, last_packet)) {
 
             // Assembla il messaggio
             bytes_received = assembly_msg(receiver_buffer, last_packet, buffer);
