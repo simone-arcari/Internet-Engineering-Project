@@ -1,0 +1,35 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     client
+relocations:
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _mutex_lock, symObjAddr: 0x0, symBinAddr: 0x100004490, symSize: 0xCC }
+  - { offsetInCU: 0x59, offset: 0x59, size: 0x8, addend: 0x0, symName: _client_socket, symBinAddr: 0x10000C000, symSize: 0x0 }
+  - { offsetInCU: 0x75, offset: 0x75, size: 0x8, addend: 0x0, symName: _server_address, symBinAddr: 0x10000C068, symSize: 0x0 }
+  - { offsetInCU: 0x143, offset: 0x143, size: 0x8, addend: 0x0, symName: _mutex, symBinAddr: 0x10000C008, symSize: 0x0 }
+  - { offsetInCU: 0x1A2, offset: 0x1A2, size: 0x8, addend: 0x0, symName: _sa1, symBinAddr: 0x10000C048, symSize: 0x0 }
+  - { offsetInCU: 0x336, offset: 0x336, size: 0x8, addend: 0x0, symName: _sa2, symBinAddr: 0x10000C058, symSize: 0x0 }
+  - { offsetInCU: 0x344, offset: 0x344, size: 0x8, addend: 0x0, symName: _mutex_lock, symObjAddr: 0x0, symBinAddr: 0x100004490, symSize: 0xCC }
+  - { offsetInCU: 0x37A, offset: 0x37A, size: 0x8, addend: 0x0, symName: _mutex_unlock, symObjAddr: 0xCC, symBinAddr: 0x10000455C, symSize: 0xCC }
+  - { offsetInCU: 0x3B0, offset: 0x3B0, size: 0x8, addend: 0x0, symName: _check_directory, symObjAddr: 0x198, symBinAddr: 0x100004628, symSize: 0x118 }
+  - { offsetInCU: 0x3F5, offset: 0x3F5, size: 0x8, addend: 0x0, symName: _connect_server, symObjAddr: 0x2B0, symBinAddr: 0x100004740, symSize: 0x224 }
+  - { offsetInCU: 0x44A, offset: 0x44A, size: 0x8, addend: 0x0, symName: _receive_file_list, symObjAddr: 0x4D4, symBinAddr: 0x100004964, symSize: 0x168 }
+  - { offsetInCU: 0x490, offset: 0x490, size: 0x8, addend: 0x0, symName: _download_file, symObjAddr: 0x63C, symBinAddr: 0x100004ACC, symSize: 0x2EC }
+  - { offsetInCU: 0x52B, offset: 0x52B, size: 0x8, addend: 0x0, symName: _upload_file, symObjAddr: 0x928, symBinAddr: 0x100004DB8, symSize: 0x508 }
+  - { offsetInCU: 0x5D0, offset: 0x5D0, size: 0x8, addend: 0x0, symName: _receive_thread, symObjAddr: 0xE30, symBinAddr: 0x1000052C0, symSize: 0x238 }
+  - { offsetInCU: 0x648, offset: 0x648, size: 0x8, addend: 0x0, symName: _handle_ctrl_c, symObjAddr: 0x1068, symBinAddr: 0x1000054F8, symSize: 0x158 }
+  - { offsetInCU: 0x69B, offset: 0x69B, size: 0x8, addend: 0x0, symName: _handle_alarm, symObjAddr: 0x11C0, symBinAddr: 0x100005650, symSize: 0x4C }
+  - { offsetInCU: 0x6C1, offset: 0x6C1, size: 0x8, addend: 0x0, symName: _client_setup, symObjAddr: 0x120C, symBinAddr: 0x10000569C, symSize: 0x334 }
+  - { offsetInCU: 0x6E7, offset: 0x6E7, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x1540, symBinAddr: 0x1000059D0, symSize: 0x4B8 }
+  - { offsetInCU: 0x26, offset: 0xAFF, size: 0x8, addend: 0x0, symName: _calculate_checksum, symObjAddr: 0x0, symBinAddr: 0x100005E88, symSize: 0xA4 }
+  - { offsetInCU: 0x2A0, offset: 0xD79, size: 0x8, addend: 0x0, symName: _calculate_checksum, symObjAddr: 0x0, symBinAddr: 0x100005E88, symSize: 0xA4 }
+  - { offsetInCU: 0x2F3, offset: 0xDCC, size: 0x8, addend: 0x0, symName: _calculate_ack_checksum, symObjAddr: 0xA4, symBinAddr: 0x100005F2C, symSize: 0x50 }
+  - { offsetInCU: 0x329, offset: 0xE02, size: 0x8, addend: 0x0, symName: _verify_checksum, symObjAddr: 0xF4, symBinAddr: 0x100005F7C, symSize: 0x98 }
+  - { offsetInCU: 0x352, offset: 0xE2B, size: 0x8, addend: 0x0, symName: _verify_ack_checksum, symObjAddr: 0x18C, symBinAddr: 0x100006014, symSize: 0x4C }
+  - { offsetInCU: 0x37A, offset: 0xE53, size: 0x8, addend: 0x0, symName: _get_last, symObjAddr: 0x1D8, symBinAddr: 0x100006060, symSize: 0xA8 }
+  - { offsetInCU: 0x3BE, offset: 0xE97, size: 0x8, addend: 0x0, symName: _check_end_transmission, symObjAddr: 0x280, symBinAddr: 0x100006108, symSize: 0x94 }
+  - { offsetInCU: 0x3F4, offset: 0xECD, size: 0x8, addend: 0x0, symName: _assembly_msg, symObjAddr: 0x314, symBinAddr: 0x10000619C, symSize: 0x11C }
+  - { offsetInCU: 0x48F, offset: 0xF68, size: 0x8, addend: 0x0, symName: _send_msg, symObjAddr: 0x430, symBinAddr: 0x1000062B8, symSize: 0x5B0 }
+  - { offsetInCU: 0x601, offset: 0x10DA, size: 0x8, addend: 0x0, symName: _receive_acks, symObjAddr: 0x9E0, symBinAddr: 0x100006868, symSize: 0x340 }
+  - { offsetInCU: 0x6F3, offset: 0x11CC, size: 0x8, addend: 0x0, symName: _timeout_acks, symObjAddr: 0xD20, symBinAddr: 0x100006BA8, symSize: 0x2FC }
+  - { offsetInCU: 0x7BA, offset: 0x1293, size: 0x8, addend: 0x0, symName: _rcv_msg, symObjAddr: 0x101C, symBinAddr: 0x100006EA4, symSize: 0x3B4 }
+...

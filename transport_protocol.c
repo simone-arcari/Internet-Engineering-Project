@@ -578,7 +578,7 @@ ssize_t rcv_msg(int socket, void *buffer, struct sockaddr *addr) {
 
         // Genera un numero casuale tra 0 e 1
         random_value = (double)rand() / RAND_MAX;
-        boolean_variable = (random_value > p);
+        boolean_variable = true;//boolean_variable = (random_value > p);
 
 
         // Verifica la checksum del pacchetto ricevuto
